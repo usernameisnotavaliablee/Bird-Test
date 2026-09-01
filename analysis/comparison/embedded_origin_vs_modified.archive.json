@@ -1,0 +1,83 @@
+{
+  "left": "analysis/modified/apktool/assets/SignatureKiller/origin.apk",
+  "right": "改版.apk",
+  "counts": {
+    "left_entries": 5540,
+    "right_entries": 5543,
+    "added": 6,
+    "removed": 3,
+    "changed_content": 4,
+    "unchanged_content": 5533
+  },
+  "added": [
+    "META-INF/ANDROID.RSA",
+    "META-INF/ANDROID.SF",
+    "assets/SignatureKiller/origin.apk",
+    "lib/arm64-v8a/libSignatureKiller.so",
+    "lib/armeabi-v7a/libSignatureKiller.so",
+    "lib/armeabi/libSignatureKiller.so"
+  ],
+  "removed": [
+    "META-INF/KINGOKEB.RSA",
+    "META-INF/KINGOKEB.SF",
+    "classes4.dex"
+  ],
+  "changed": {
+    "META-INF/MANIFEST.MF": {
+      "left": {
+        "size": 481681,
+        "compressed_size": 210480,
+        "crc32": 619024714,
+        "compression": 8
+      },
+      "right": {
+        "size": 482023,
+        "compressed_size": 211849,
+        "crc32": 1159177698,
+        "compression": 8
+      }
+    },
+    "classes.dex": {
+      "left": {
+        "size": 8368760,
+        "compressed_size": 3436796,
+        "crc32": 4086502369,
+        "compression": 8
+      },
+      "right": {
+        "size": 8143784,
+        "compressed_size": 3329047,
+        "crc32": 3579870547,
+        "compression": 8
+      }
+    },
+    "classes2.dex": {
+      "left": {
+        "size": 7868788,
+        "compressed_size": 2686904,
+        "crc32": 2353294273,
+        "compression": 8
+      },
+      "right": {
+        "size": 7883376,
+        "compressed_size": 2706554,
+        "crc32": 4288142453,
+        "compression": 8
+      }
+    },
+    "classes3.dex": {
+      "left": {
+        "size": 1730948,
+        "compressed_size": 730394,
+        "crc32": 1107597050,
+        "compression": 8
+      },
+      "right": {
+        "size": 2072348,
+        "compressed_size": 862874,
+        "crc32": 1601390840,
+        "compression": 8
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# Local operating-system and editor metadata
+.DS_Store
+/.claude/
+
+# Reproducible APK extraction, decompilation, and runtime caches
+/最新版/
+/analysis/.runtime/
+/analysis/original/
+/analysis/modified/
+/analysis/latest/
+
+# Keep source APKs, reports, comparison results, and analysis tools tracked.
