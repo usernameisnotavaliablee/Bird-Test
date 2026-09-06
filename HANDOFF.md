@@ -87,3 +87,22 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 
 ### 环境
 - 模型 k3[1M]，effort max；/code-1.0.4 skill 流（规划→执行→验证→交付）
+
+---
+
+## 2026-09-06 · 终端重启前最终快照（断点封存）
+
+### 当前断点（一句话）
+本会话主线已从「最新版觅Ta 改造」转入「**查他人接口响应解析面深挖**」。**恢复入口 = 上方「恢复后核查清单」8 项，从第 1 项按序执行**。
+
+### 任务清单快照（TaskCreate 状态）
+- #11 ✅ 建立 HANDOFF+git 工作流
+- #6 🔄 攻克 origin dex 反编译——**nomap 方案已突破**（`origin_repaired_nomap` + `jadx --show-bad-code --no-res`，classes3 已出 1550 java）；classes.dex(8.88M)/classes2.dex(7.85M) 尚待全量反编译到 `analysis/latest/origin_jadx_fixed/`
+- #7 ⏳ 彻底分析最新版觅Ta 新实现与改造可行性
+- #8/#9/#10 ⏳ 第二阶段（改造/打包签名/验证），需用户确认后启动
+
+### 已提交的 git 状态
+- `d43e035` 初始备份；`fb0d3e6` HANDOFF.md 建立。后续深挖的中间结论可能未全部 commit——重启后第一件事：`git status` 看未提交项，先补 commit 再续作。
+
+### 续接指南
+新会话：① 读本文件全文（重点两个 2026-09-06 章节）② 读计划 `/Users/mac/.claude/plans/hazy-fluttering-whistle.md` ③ 跑「恢复后核查清单」第 1 项 ④ 每个结论落 HANDOFF + commit（沿用本工作流）。
