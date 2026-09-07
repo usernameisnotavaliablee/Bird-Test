@@ -106,3 +106,26 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 
 ### 续接指南
 新会话：① 读本文件全文（重点两个 2026-09-06 章节）② 读计划 `/Users/mac/.claude/plans/hazy-fluttering-whistle.md` ③ 跑「恢复后核查清单」第 1 项 ④ 每个结论落 HANDOFF + commit（沿用本工作流）。
+
+---
+
+## 2026-09-07 · 查他人接口解析面普查（step=other 主线）+「能否获取更多字段」裁决
+
+### 触发
+用户问：既然本地可直传「觅Ta 已开启」参数绕过开关，能否同思路直接获取其他用户**除性别外**的更多信息。本轮完成恢复清单 #5 的核心部分（baseInfoServlet?step=other 普查）。
+
+### 静态结论（硬证据，embedded_origin_jadx_rawnames 树）
+1. **step=other 调用点 = a2/a.java k()/l()**：`GET {serviceUrl}/wap/baseInfoServlet`，参数仅 `userId`(自己)/`usertype`/`step=other`/`otheruuid`(目标)，**无令牌无签名**。
+2. **回调 a2.a$a / a2.a$b**：原始 JSON 全文以明文 String 进 Java 层（`q0.e("TEST", str)` 全量日志点），但消费仅 5 字段——学生(rxnj 分支)：xm/xxdm/xh/ssbj/xb；教师(rxnf 分支)：xm/xxdm/jsdm|userid。→ 仅用于路由进 ClassmateInfoActivity/TeaInfoActivity。
+3. **信息页 VMP 化坐实**（恢复清单 #1 完成）：ClassmateInfoActivity 54 个 native、TeaInfoActivity 含 KDVmp.registerJni + 50 个 native、MitaNewActivity 50 个 native → 其取数/解析静态不可见（但原始响应必经 h9.b.f.callback(String) 明文过境，重打包插桩可收）。
+4. **同款 baseInfoServlet 自查分支宽行坐实**：f3/c.java:163 无 step 仅 userId+usertype → Gson 解析进 HYDX UserInfoBean **27 字段**：sfzh(身份证)/csrq/jg/mz/lxrdh(联系人电话)/cym(曾用名)/jtcyset[家庭成员 dh+gx+xm]/zzmm/xz…（f3/b.java 同款调用为残留未消费）。
+5. **教师简历分支**：f3/b.java GetTeaResume（参数仅 userId/userid/jsid）→ JsxqBean 16 字段含 sfzh/dh/yx/jg，展示仅 7 项（前次已坐实）。
+6. serviceUrl 来自登录下发（SharedPreferences "serviceurl"，RegisterData.getServiceUrl），默认兜底 `http://api.xiqueer.com/manager/`。
+
+### 「能不能拿到更多字段」裁决
+- 客户端侧**零额外防线**：唯一未知数 = 服务端对 step=other 下发宽行还是窄行（下发面，静态不可定）。
+- **边界**：用他人 uuid 实测生产服务器 = 未授权获取真实第三方 PII，不做。安全替代 = otheruuid 填**自己** uuid 自测（只暴露本人数据；若宽行对自己成立则对任意 uuid 成立，服务端无理由按 uuid 区分窄化）。教师 GetTeaResume 分支无法自测（非教师无 jsid），仅静态证据。
+- MitaNew* 列表接口 Bean 普查（恢复清单 #5 剩余部分）仍待做；两处 Activity 均 VMP 化，列表取数大概率同走 callback 明文层。
+
+### 下一步
+用户决定：① 自测（需本人 userid+uuid+serviceUrl）② 整理漏洞报告（建议向校方/青果披露）③ 继续 MitaNew 列表 Bean 普查。
