@@ -129,3 +129,24 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 
 ### 下一步
 用户决定：① 自测（需本人 userid+uuid+serviceUrl）② 整理漏洞报告（建议向校方/青果披露）③ 继续 MitaNew 列表 Bean 普查。
+
+---
+
+## 2026-09-07 · 实机抓包方案侦察（用户决定先验证链路再写报告）
+
+### 用户决策
+先验证「链路是否真能打通」再写漏洞报告，避免服务端实际有防护导致误报。方案 = 已登录设备发起觅Ta 请求 + 抓包分析。
+
+### 抓包关键前提（本轮静态查明）
+1. **HTTP 栈 = OkHttp 2.x（h9/b.java）**：无任何自定义 TrustManager/SSLSocketFactory/HostnameVerifier → **无证书绑定**。
+2. **请求无头无 Cookie**：h9/b.java 全文 0 处 addHeader/Cookie/Authorization（唯一 token 字段在 JPush 推送 POST，与业务无关）→ 抓包可最终坐实「无会话绑定」。
+3. **Manifest**：`usesCleartextTraffic="true"` + `network_security_config` 仅放行明文、**未配用户 CA 信任锚** → 若校服务器走 HTTPS，Android 7+ 装 mitmproxy 用户证书无效，须 Frida hook `h9.b$f.callback(String)` 拿明文；若走 HTTP 则完全无障碍。默认兜底 serviceUrl = `http://api.xiqueer.com/manager/`（明文 HTTP）。
+4. **logcat 捷径存疑**：a2/a.java 有 `q0.e("TEST", 原始JSON)` 全量日志点，f3/c 有 `q0.e("KcbCxActivity", ...)`；改版树 q0 已掏空，原版 payload_jadx 树为空无法比对（核查清单 #4 根因疑似 = 原版 payload 反编译同样失败，而非类缺失——待证）。实机上 `adb logcat | grep TEST` 零成本先试。
+5. VMP 只挡静态阅读，**网络流量不受 VMP 影响**，代理抓包对 MitaNew* 页同样有效。
+
+### 待用户实机执行（四步）
+1. `adb logcat | grep -E 'TEST|KcbCxActivity'` 开同学信息页，看日志是否直吐原始 JSON。
+2. 手机代理 → Mac mitmproxy，重新登录，确认 serviceUrl 是 HTTP/HTTPS，拿本人 userid/uuid/usertype。
+3. 抓 `baseInfoServlet?step=other`（开一位已开启觅Ta 同学的信息页）+ `wapController.jsp?step=GetTeaResume`（教师简历弹窗）：看请求有无 Cookie、响应 JSON 是否超出 5/7 展示字段。
+4. 自测回放：step=other 的 otheruuid 换本人 uuid 原样重放 → 判定服务端是否窄化。
+- 判定：宽行 → 报告成立（水平越权+批量拖库面）；窄行 → 降级为「解析面过宽+弱鉴权」措辞。
