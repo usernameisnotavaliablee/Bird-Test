@@ -74,13 +74,18 @@ analysis/
 
 ### 3. 数据窃取注入（重大发现）
 改版者注入 `mt.Log22A16D` 日志组件，把敏感数据落盘：
-- `y8/j0.java`：**4 处** `Log22A16D.a()` 记录**解密后的明文密码**（AES key `loginkeyapp93214`、IV `12fg45gpsdfz34ab`，`f9/a.java` 硬编码）+ 3 处密码密文
-- `b8/b.java`：**3 处** `Log22A16D.a()` 记录他人姓名/性别/班级（每次点击同学即写）
-- 落盘路径：`/sdcard/MT2/logs/com.kingosoft.activity_kb_common-<时间戳>.log`（外部存储，可被其他应用读取），无加密、无轮转、无回传
-- Log 类审计：7 个 `mt/Log*` 中 **6 个改版注入**（仅 `Log22A16D` 激活，其余 5 个休眠/诱饵），`LogD78843` 为**底包自带**且休眠
-- 无其它监控组件：未植入远程回传/截屏/剪贴板/键盘/无障碍/网络 hook（`b9/a.java` 截屏监听为底包自带）
+- `y8/j0.java`：**4 处** `Log22A16D.a()` 记录**解密后的明文密码**（AES key `loginkeyapp93214`、IV `12fg45gpsdfz34ab`，`f9/a.java` 硬编码）+ 3 处密码密文（等价明文）；`j0.g()` 被 13 处 Activity 启动调用 → 明文密码反复落盘。**仅记录密码，不记录 token/userid**
+- `b8/b.java`：**3 处** `Log22A16D.a()` 记录他人姓名/性别/班级（每次点击同学即写；smali 另有 1 条在被掏空后不可达的死代码中）
+- 落盘路径：`/sdcard/MT2/logs/com.kingosoft.activity_kb_common-<时间戳>.log`（外部存储），**裸字符串、无 `##GET##/##PUT##` 前缀**、无加密、无轮转、无回传
+- Log 类审计：7 个 `mt/Log*` 中 **6 个改版注入**（仅 `Log22A16D` 激活，其余 5 个休眠/诱饵），`LogD78843` 为**底包自带**且休眠；`Log22A16D/LogE0E388` 走 MT2/logs，`Log25EB87/5A0B53/A704BA/BE294D` 走 sdcard 根路径
+- 无其它监控组件：未植入远程回传/截屏/剪贴板/键盘/无障碍/网络 hook/埋点 SDK（`b9/a.java` 截屏监听为底包自带）
 
-### 4. 第三方 SDK 零改动
+### 4. 数据面结论（查他人 vs 查自己）
+- **服务端鉴权弱**：`baseInfoServlet?step=other` 仅凭 `otheruuid` 即可拉起他人信息（无签名令牌），但服务端**只在查他人接口下发教育学术信息**（姓名/性别/头像/学号/院系/班级/专业/年级/周课表），**不下发身份敏感字段**（身份证/电话/邮箱/地址/家长信息）。
+- 敏感字段 getter 调用统计：`getSfzh`(身份证)/`getGkksh`(高考号)/`getCsd`(出生地)/`getJg`(籍贯)/`getZzmm`(政治面貌)/`getLxryj`(邮箱)/`getByzx`/`getSyd` 等 **0 处非 bean 调用** → 查他人不可见；出生日期/民族仅在**教师公开简历**（`oriHd_ggym&step=GetTeaResume`）展示；联系人电话/邮箱仅在**查自己**的就业意向场景。`UserInfoBean` 敏感字段多不代表查他人能拿到。
+- 鉴权强度表 / 数据面全集见 `analysis/数据面与监控组件深挖.md`。
+
+### 5. 第三方 SDK 零改动
 推送 appkey（JPUSH `fa5d848b146f9ac37e72b100` / XIAOMI / OPPO）、百度地图/语音 key、华为 HMS、assets/res 配置全部与底包 byte-identical。18 个 SDK 差异文件经 DEX 方法集比对全部是反编译噪声，改版者没有篡改任何 SDK 配置或数据回传。
 
 ### 5. 签名绕过完整机制

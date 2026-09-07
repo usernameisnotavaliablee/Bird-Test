@@ -150,3 +150,48 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 3. 抓 `baseInfoServlet?step=other`（开一位已开启觅Ta 同学的信息页）+ `wapController.jsp?step=GetTeaResume`（教师简历弹窗）：看请求有无 Cookie、响应 JSON 是否超出 5/7 展示字段。
 4. 自测回放：step=other 的 otheruuid 换本人 uuid 原样重放 → 判定服务端是否窄化。
 - 判定：宽行 → 报告成立（水平越权+批量拖库面）；窄行 → 降级为「解析面过宽+弱鉴权」措辞。
+
+---
+
+## 2026-09-07 · 实机四步路线三代理静态复核（路线修正版）
+
+### 触发
+用户要求评价实机抓包四步路线可行性，开 3 个只读 subagent 逐条验证。全部完成（中途 2 个因 5h 限额 403 中断，恢复后续跑收尾）。
+
+### 复核结论（逐代理摘要，均带 文件:行号 证据，主证据树 = embedded_origin_jadx_rawnames）
+
+**代理A（logcat 捷径）——第 1 步基本证伪**
+- 业务日志类 = `y8/q0`（LogUtil）/`y8/u0`（MyLog），**改版四棵树全部掏空**（方法体空、smali `return-void`、dex 级复核 insns=1），`a2/a.java:46` 的 `q0.e("TEST", 原始JSON)` 调用点还在但实机不吐。
+- **官方原版 452 的 5 个 dex 中 "TEST" 字面量 0 命中**（按 dex 字节模式复核）——官方已删 TEST 这批调用，452/454 实机 grep TEST 必然无输出。
+- 原版 452 有 "KcbCxActivity" tag ×1 + 25 条 `getGetXxxBean result =` 日志串 + `Lt9/q0;`（原版 LogUtil 混淆名）存在，但方法体是否真调 Log 二进制层面无法定论 → 唯一值得一试：`官方452 + adb logcat | grep KcbCxActivity`。
+- 改版上 `kb/l.java:43` 有漏网直调 `Log.v("TEST","Loginreturn="+登录响应全文)` 会真吐（登录响应，非查他人）。
+
+**代理B（mitmproxy 链路）——第 2/3 步比预期更顺**
+- 业务栈 = okhttp3 3.10.0（非 2.x，此前记错），**无 pinning 且是 trust-all**：`BaseApplication.x()`（:826-834）空 checkServerTrusted + hostnameVerifier 恒 true → mitmproxy 证书直接过，**不装用户 CA 也行**。
+- 尊重系统代理（默认 ProxySelector），全树 0 处代理/VPN/模拟器对抗（lb/b.java 模拟器检测是死代码）。
+- serviceUrl 兜底 = 明文 `http://api.xiqueer.com/manager/`（y8/j0.java:58），全树无一 https 域名。
+- **登录响应与 baseInfoServlet 响应 = AES/CBC/PKCS5+Base64 密文**，key/IV 硬编码 `loginkeyapp93214`/`12fg45gpsdfz34ab`（f9/a.java:13-23，开关 BaseApplication.N0 恒 true）→ 抓到包可离线解；GetTeaResume（wapController.jsp）响应**不在解密分支 = 明文 JSON**。
+- 四要素（serviceurl/userid/uuid/usertype/token）落 SharedPreferences personMessage（y8/j0.java 三处登录写盘）。
+
+**代理C（回放细节）——第 3/4 步需修正**
+- **wire 格式修正**：step=other 与 GetTeaResume 代码里写 `A("GET")` 但实际是 **加密 POST 表单**——业务参数经 `f9.b.k()` 自定义 base36 流密码（f9/b.java:258-289，纯 Java 可移植）打包成 `param/param2/timestamp/echo/encrptSecretKey/xqerSign` 六元组 + 表单层 `token/appinfo/appsjxh`。抓包别看 query string。
+- 「5 个路由字段」断言**成立**：学生 xm/xxdm/xh/ssbj/xb；教师 xm/xxdm + jsdm（回调a）或 userid（回调b），两回调教师键名不同。
+- otheruuid 来源：关心我的人列表（guanxin&step=course_chakan_me 响应 uuid）/ 学友圈评论 pj_uuid；**自己 uuid 最短路径 = 登录响应 uuid 字段**（j0.d()，空时回退 userid）。
+- GetTeaResume 的 jsid = 任课教师 rkjsdm，触发点 YxzkcsqCkActivity.java:54-57 等（非 KcbCxActivity——其 f3.b 字段无赋值调用）。
+- **原样重放密文：curl 可行**（前提服务端不校验 timestamp 时效/echo 唯一性，实机一试便知）；**改 otheruuid 重放：明文 curl 无效**，须移植 f9.b.k 加密算法（纯 Java，可搬成 Python）或 Frida hook `f9.b.u` 入参。
+
+### 修正版四步（替代上一节）
+1. logcat 捷径降级为「可选项」：只试 `官方452 + grep KcbCxActivity`（10 秒成本），查他人 JSON 别指望。
+2. mitmproxy 主力路线：装 adb+mitmproxy（**本机当前两者都未装**），手机同 Wi-Fi 指代理 → 重新登录 → 登录响应用硬编码 key 离线解出四要素（或直接 run-as/root 读 shared_prefs personMessage.xml）。
+3. 抓 POST 表单：step=other 响应离线 AES 解密后看键集（重点 sfzh/dh/yx/jg/csrq）；GetTeaResume 响应明文直读数 16 键。
+4. 回放：先原样密文重放（验时效/唯一性校验），再决定改 otheruuid 走「f9.b.k 算法移植脚本」还是「Frida hook f9.b.u」。
+- 判定标准不变：宽行 → 水平越权+批量拖库面；窄行 → 解析面过宽+弱鉴权。
+- 边界重申：回放只用自己 uuid，不碰他人数据。
+
+### 附带发现（纠正 HANDOFF 旧记录）
+- 此前「HTTP 栈 = OkHttp 2.x」记错：业务是 okhttp3 3.10.0，squareup 2.x 只用于图片。
+- 此前「最新版 nomap 1550 java 产物」已不在磁盘（analysis/latest/ 下 0 业务 java），若需 454 业务源码须重跑 jadx。
+- 本机环境缺口：`adb`、`mitmproxy` 均未安装（需 brew install android-platform-tools mitmproxy）。
+
+### 下一步
+用户实机执行修正版四步；若确认要改 otheruuid 重放，先做 f9.b.k 算法移植（分析工具脚本入 analysis/tools/）。
