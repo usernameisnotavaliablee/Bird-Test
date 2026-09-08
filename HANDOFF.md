@@ -195,3 +195,18 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 
 ### 下一步
 用户实机执行修正版四步；若确认要改 otheruuid 重放，先做 f9.b.k 算法移植（分析工具脚本入 analysis/tools/）。
+
+---
+
+## 2026-09-08 · 《实操手册.md》交付
+
+### 产出
+`实操手册.md`（仓库根目录）：工具清单（adb/mitmproxy/openssl/jq/Frida 及安装命令）+ 手把手四步
+（logcat 捷径 → mitmproxy 定协议+解密拿四要素 → 时序法抓两个决定性 POST → 自测回放两路线）+
+判定对照表 + 排错 FAQ + 合规边界。
+
+### 写手册时新核实的事实
+- `f9/a.java:11-27` 解密顺序坐实：URLDecode → Base64 → AES/CBC/PKCS5（key=loginkeyapp93214, iv=12fg45gpsdfz34ab）。
+- 手册用 **openssl 一行流**做离线解密（key/IV 已换算成 hex 内嵌命令），避免 pip 装 pycryptodome（brew python3 有 PEP 668 限制）。
+- 本机环境：brew/python3/pip3 均在；adb/mitmproxy 未装（手册第一节就是装它们）。
+- 回放首选 **mitmproxy 自带 Replay**（免 curl 抄 body）；改 otheruuid 才需 f9.b.k 移植（路线 A）或 Frida hook f9.b.u（路线 B，需 root）。
