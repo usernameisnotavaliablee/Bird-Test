@@ -276,3 +276,23 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 2. 从搜同学/校友圈入口点一位同学 → mitmweb 过滤 `~u baseInfoServlet` 应出现 GET 请求。
 3. 把该请求响应体（密文）发来 → 按既有 AES 流程解密数键做宽/窄行判定。
 4. GetTeaResume：点任课教师姓名弹简历 → 抓 wapController.jsp 明文响应数 16 键。
+
+---
+
+## 2026-09-11 · 工具备齐 + 手册修正（等待用户开觅Ta开关后重抓）
+
+### 新发现（静态）
+- **请求加密在 native 层**：`f9/b.java:u()` 拼明文串后调 `NDKTools.getStringFromNDKZDY(明文, key, "zdy")` 一次产出六元组。`f9.b.k()/j()`（base36 流密码）全树无人调用 = 历史遗留死代码，移植它无效。手册 5.2 路线 A 已据此改写（原稿误以为可纯 Java 移植）。
+- h9.b 里 step=other 标记 "GET"，但与 POST 共用同一加密通道（`if (k.equals("POST") || k.equals("GET"))` 走同一 e9.a 分支），线上形态两种都可能，抓包时两种都留意。
+
+### 新工具
+- `analysis/tools/decrypt_xqr.py`：step=other/登录 响应一键解密 + 数键 + 宽窄判定（pbpaste | python3 ... -）。已用登录密文回归测试通过（82 键正常解出）。
+
+### 手册更新（实操手册.md）
+- §4.1 加前置条件：自己觅Ta开关必须开（否则被自检弹窗拦截，baseInfoServlet 零命中）；入口修正：搜同学/学友圈/同学情 → 信息页；觅Ta列表点人 → 课表页（不发 step=other）。
+- §5.2 改三条路：Z=零工具搜自己点自己（推荐）；A=Frida hook NDKTools.getStringFromNDKZDY 第一入参；B=逆向 so（不推荐）。
+
+### 下一步（等用户实机操作）
+1. 开觅Ta开关 → 搜同学入口点人 → 抓 baseInfoServlet → decrypt_xqr.py 判定宽窄。
+2. 教师简历弹窗抓 GetTeaResume 明文数 16 键。
+3. mitmproxy Replay 原样重放测时效校验；路线 Z 搜自己点自己做只碰自己数据的宽行复证。
