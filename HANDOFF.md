@@ -210,3 +210,13 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 - 手册用 **openssl 一行流**做离线解密（key/IV 已换算成 hex 内嵌命令），避免 pip 装 pycryptodome（brew python3 有 PEP 668 限制）。
 - 本机环境：brew/python3/pip3 均在；adb/mitmproxy 未装（手册第一节就是装它们）。
 - 回放首选 **mitmproxy 自带 Replay**（免 curl 抄 body）；改 otheruuid 才需 f9.b.k 移植（路线 A）或 Frida hook f9.b.u（路线 B，需 root）。
+
+---
+
+## 2026-09-10 · 实机执行踩坑：adb 未连上 + Mac 热点疑问
+
+### 问题与实测诊断
+1. 用户问「Mac 连 Wi-Fi 时开不了热点」——macOS 单网卡限制，且方案本不需要 Mac 开热点（同连路由器 Wi-Fi 即正确拓扑）。
+2. 「同 Wi-Fi 下 adb logcat 无任何输出（去掉 grep 也是）」——本机实测：`adb devices -l` **列表为空**，`system_profiler SPUSBDataType` **USB 总线上看不到手机** → adb 走 USB 不走 Wi-Fi，手机未通过数据线在 USB 层被识别（纯充电线/未开 USB 调试/未授权弹窗，三选一）。
+   - 附带发现：沙箱内 adb 起不了 daemon（tcp:5037 绑定被拦），本机执行 adb 需提权。
+3. 已把「adb 只走 USB + 数据线 + 授权弹窗 + 品牌额外开关 + 无线 adb 备选」和「AP 客户端隔离检测法」补进《实操手册.md》的手机要求、第 1 步前置、FAQ 三处。
