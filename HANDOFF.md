@@ -220,3 +220,16 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 2. 「同 Wi-Fi 下 adb logcat 无任何输出（去掉 grep 也是）」——本机实测：`adb devices -l` **列表为空**，`system_profiler SPUSBDataType` **USB 总线上看不到手机** → adb 走 USB 不走 Wi-Fi，手机未通过数据线在 USB 层被识别（纯充电线/未开 USB 调试/未授权弹窗，三选一）。
    - 附带发现：沙箱内 adb 起不了 daemon（tcp:5037 绑定被拦），本机执行 adb 需提权。
 3. 已把「adb 只走 USB + 数据线 + 授权弹窗 + 品牌额外开关 + 无线 adb 备选」和「AP 客户端隔离检测法」补进《实操手册.md》的手机要求、第 1 步前置、FAQ 三处。
+
+---
+
+## 2026-09-10 · 实机抓包已打通（登录阶段）
+
+### 实测事实（用户截图佐证）
+- adb/USB 问题已解决，mitmproxy 链路**已打通**：成功抓到 `http://api.xiqueer.com/manager/wap/wapController.jsp` 的一批 GET+POST。
+- **该校 serviceUrl = 默认云端 `api.xiqueer.com`，明文 HTTP**——兜底值即真实值，TLS/证书完全不用管。
+- wire 形态补充：既有 POST 表单（六元组在 body），也有 GET（六元组在 query string，如 `appsjxh=&encrptSecretKey=...`，响应 0 字节多为探活）→ 手册「别看 query string」表述已修正为仅针对 step=other/GetTeaResume 两条 POST。
+- getLoginInfoNew 认包三招已补进手册 FAQ（时序/体积/逐条解密终验）。
+
+### 下一步
+用户解密登录响应拿四要素 → 手册第四节抓 step=other + GetTeaResume。
