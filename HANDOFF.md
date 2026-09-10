@@ -250,3 +250,29 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 
 ### 下一步
 手册第四节：清列表 → 打开已开启觅Ta 同学信息页 → 抓 POST /wap/baseInfoServlet → 解密数键（对比 5 路由字段，重点 sfzh/dh/yx/jg/csrq）→ 教师简历弹窗抓 GetTeaResume 明文数 16 键。
+
+---
+
+## 2026-09-11 · flows 复盘：step=other 从未发出——被客户端自检弹窗拦下
+
+### 抓包内容（flows_20260910_mitm.bin，462KB / 117+ 条，已移入 analysis/captures/）
+- **全程 0 条 baseInfoServlet**——用户过滤 `~u baseInfoServlet` 无结果的原因：App 根本没发这个请求。
+- 觅Ta 4 人列表 ×2（每行 8 键 toid/toname/toxxname/tobjmc/toxb/usertype/touuid/state）。
+- 姓名搜索 ×1（每行 5 键 sf/xm/bh/xb/uuid，3 条结果）。
+- **3 条一模一样的检查请求（param2 相同）均返回 `{"state":"0"}`**——这是关键。
+- 请求头 `appinfo=android2.6.435` → 手机上装的是 435 改版（不影响代码路径结论，435/452 两树一致）。
+
+### 根因（静态坐实，435/452 两树一致）
+- 进同学信息页前 App 先查**你自己**的觅Ta开关：`y8/s0.java` a()/b() → q4.b getMITA → **state=="1" 才调 a2.a.k()/l() → GET baseInfoServlet?step=other**；state=0 弹窗「您未开启【觅Ta】开关…是否开启？」。
+- 抓包里 3 条 state:0 就是这个自检 → 用户开关是关的 → 每次点人都停在弹窗，step=other 从未发出。
+- 入口区分：觅Ta列表点人 → 查对方开关 → 进 **TaWeekCourseActivity（课表页）**，不走信息页；信息页（ClassmateInfoActivity/TeaInfoActivity）走 ssj/c 适配器（校友圈/同学情/搜同学）→ s0 → step=other。
+- 漏洞视角备注：觅Ta 开关校验纯客户端闸门，服务端是否校验正是第 4 步回放要测的。
+
+### 端点修正
+- GetTeaResume 实际在 **wapController.jsp**（f3/b.java m()：action=oriHd_ggym&step=GetTeaResume&jsid=教师号），**不在** baseInfoServlet；baseInfoServlet 承载 step=other（a2/a.java）与 getCourse_Detail_hd（f3/c.java）。手册中「GetTeaResume 在 wapController.jsp」原本就写对了，此处只是再次坐实。
+
+### 下一步
+1. 用户在 App 里**开启自己的觅Ta开关**（点人后弹窗点「开启」＝setMITA=1，随后自动继续 step=other；或在觅Ta设置里开）。提醒：开启=自己信息对同校可见，测完关回。
+2. 从搜同学/校友圈入口点一位同学 → mitmweb 过滤 `~u baseInfoServlet` 应出现 GET 请求。
+3. 把该请求响应体（密文）发来 → 按既有 AES 流程解密数键做宽/窄行判定。
+4. GetTeaResume：点任课教师姓名弹简历 → 抓 wapController.jsp 明文响应数 16 键。
