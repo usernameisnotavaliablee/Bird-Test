@@ -233,3 +233,20 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 
 ### 下一步
 用户解密登录响应拿四要素 → 手册第四节抓 step=other + GetTeaResume。
+
+---
+
+## 2026-09-10 · 登录响应解密成功，四要素到手
+
+### 实测
+用户贴来 4.3kb POST 的 Response Body（4657 字符 URL 编码 Base64）→ 按 f9/a.java 顺序（URLDecode→Base64→AES/CBC/PKCS5，key=loginkeyapp93214 / iv=12fg45gpsdfz34ab）**一次解开**，明文 JSON 82 键，`msg=通过身份验证！` → 坐实该包即 getLoginInfoNew 响应。
+- `serviceurl = http://api.xiqueer.com/manager/`（明文 HTTP，最终坐实）
+- `userid = uuid = 10475_2510250975`（**uuid 与 userid 同值**，自测回放时 otheruuid 直接用它即可）；`usertype = STU`；`token`、`xqzh`、`jwt`、`xm` 均在。
+- 登录响应本身即宽行：82 键含全部功能开关（OpenMt/serviceMt/OpenTxlb/serviceGxwdr/OpenXyq/OpenSsj…）+ 个人字段。
+
+### 操作细节备忘
+- openssl 管道注意：`-a` 走 base64 文本模式本例会报 wrong final block length；**先在 python 里 b64decode 成二进制文件，再 `openssl enc -d`（不带 -a）**即成功。
+- 新建 `analysis/captures/` 存密文+明文，并已把 `/analysis/captures/` 加入 .gitignore（原 gitignore 只排除 original/modified/latest 三棵树，captures 含明文 PII+token，**绝不能入库**）。
+
+### 下一步
+手册第四节：清列表 → 打开已开启觅Ta 同学信息页 → 抓 POST /wap/baseInfoServlet → 解密数键（对比 5 路由字段，重点 sfzh/dh/yx/jg/csrq）→ 教师简历弹窗抓 GetTeaResume 明文数 16 键。
