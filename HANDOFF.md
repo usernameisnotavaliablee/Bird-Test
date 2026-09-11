@@ -346,3 +346,14 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 - 拿原版真实 Java 的唯一出路 = **重新动态脱壳**（待 app 完整运行、dex 全部解密后再 dump：FDEX2/Youpk 或晚时点 /proc/pid/mem 提取），或提取壳运行时密钥离线解密 APK 内加密 payload。纯静态无解。
 - 修正：此前 HANDOFF 记「A1-classes2 = 1960 java ✅」实为**空壳桩**——jadx 输出计数>0 不算成功，须抽查文件内容。
 - 已同步 CLAUDE.md 目录语义（payload_dex 注记半密文不可读）。
+
+---
+
+## 2026-09-11 · B 路结果：454 内嵌 dex 同样被壳加密（静态反编译死路），觅Ta 新闸门形态待定
+
+- classes2 1947/1947、classes3 1550（1548 ERROR）全空壳；classes.dex 两次 OOM（内生：class_data uleb 垃圾值→巨型 ArrayList，持锁独跑仍 OOM）；classes4/5 损坏残留无类。
+- 壳加密形态（agent B python 结构校验）：字符串池 39-45% 可读、坏串集中在数据段 ~820KB 连续加密区（无 uleb 前缀的密文池）；class_data 近乎 100% 不可用（class_data_off 指向壳修补表 `0xfee6` 标记对区域），全 dex 仅 1 个类（g9/a）全解析通过。与原版 payload 特征完全相同——**「nomap 变体可用」前提被推翻**，历史「1550 java 试跑成功」是空壳误判。
+- 7 项验证关键修正：① Mita_edit/MitaListBean 在 454 字符串表确认存在（classes3/classes2，包名与预期一致），但**健康底包交叉验证：这两类旧版就有**——Mita_edit 是带搜索图标的通用 EditText 控件（非觅Ta 闸门）、MitaListBean 是觅Ta 列表 bean（Qd/Name/JID/JIDimagePath/BJMC/XB）；② 旧 4 类 454 三 dex 描述符 0 命中（删除坐实），new_kebiao 仅剩 JskbActivity/TaWeekCourseActivity；③ y8/s0、z7/v 描述符已无、a2/a 仍在（classes.dex idx 12959）；④ 觅Ta 文案/getMITA/loginkeyapp93214 可读字符串 0 命中（资源层或加密池，静态无法确认 AES key 是否仍硬编码）；⑤ "MiTaUtil.java" 被 9 个混淆类引用为 source_file（诱饵或工具类，类体加密）。
+- 资产保留：三个 dex 全量恢复字符串表已从 /tmp 转存 `analysis/latest/string_tables/`（dex_strings_classes*.dex.txt，共 ~17MB，可直接 grep 做字符串级检索）；6 个诊断脚本在 `~/ClaudeCode/dex_*.py`。
+- 454 代码面静态出路（按性价比）：① 字符串表侦察（已具备）② class_defs/type_ids 级 452↔454 diff（结构表完好）③ origin.apk 资源层解码（弹窗文案可能可读，未试）④ 动态 dump（Frida FDEX2/Youpk 或晚时点 /proc/pid/mem，需 root；实机链路已打通）或逆壳解密器离线解密。
+- 已同步 CLAUDE.md（454 壳加密结论 + Mita_edit 修正 + 目录语义/环境命令更新为勿再跑 jadx）。

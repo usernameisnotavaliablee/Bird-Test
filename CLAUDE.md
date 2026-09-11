@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **原版是加固包**：`AndroidManifest.xml` 的 application 入口为 `com.nesun.stub.ZAP`（典型加固壳桩），真实业务代码被抽取到 `analysis/original/payload_dex/` 的 5 个 dex 中，非壳代码需从 payload 反编译产物阅读。
 - **改版是对原版的二次重打包**：注入 `libSignatureKiller.so`（arm64-v8a / armeabi-v7a / armeabi）与 `assets/SignatureKiller/origin.apk` 绕过签名校验，替换签名证书（`KINGOKEB` → `ANDROID`），移除内嵌的 `assets/origin.apk` 和原壳的 `classes4.dex`，新增百度地图 SDK（`libBaiduMapSDK_*.so`）。
-- **最新版（2.6.454）是官方加固包**：壳桩 `com.nesun.stub.ZAP`，业务代码在内嵌 `assets/origin.apk` 的 5 个 dex，签名仍为 `KINGOKEB.RSA`（与原版同证书），未被篡改。**觅Ta 已重构**：旧 4 类（TeaInfoActivity/TdkbActivity/MitaNewActivity/MitaNewListActivity）被官方删除，新实现 = `Mita_edit`（ui/view/new_view/）+ `MitaListBean`（bean/jsjy/bean/）。
+- **最新版（2.6.454）是官方加固包**：壳桩 `com.nesun.stub.ZAP`，业务代码在内嵌 `assets/origin.apk` 的 5 个 dex，签名仍为 `KINGOKEB.RSA`（与原版同证书），未被篡改。**壳对 at-rest dex 加密**（字符串池 ~60%、class_data ~100% 密文/垃圾）——jadx 反编译全部空壳桩，**454 业务代码静态不可读**，要代码须动态 dump（Frida，需 root）或逆壳解密器。**觅Ta 已重构**：旧 4 类（TeaInfoActivity/TdkbActivity/MitaNewActivity/MitaNewListActivity）确认删除、自检主体 `y8/s0` 与 `z7/v` 也删除、`a2/a` 仍在；`Mita_edit` 经健康底包交叉验证是**旧版就有的通用搜索框控件**（非新闸门），454 新闸门形态未知（在加密池内）。字符串级侦察用 `analysis/latest/string_tables/` 的恢复字符串表。
 
 ## 目录语义（命名即含义）
 
@@ -45,7 +45,9 @@ analysis/
     origin_repaired_nomap/  ← jadx 唯一可用输入：校验和修复 + map-list 置零 的
                               内嵌底包 dex；用 origin_repaired 会
                               BufferUnderflowException 产出 0 文件
-    origin_jadx*/ jadx/     各轮 jadx 产物（部分全空，见上）
+    origin_jadx*/ jadx/     各轮 jadx 产物——454 dex 被壳加密，全部空壳桩，勿再跑
+    string_tables/          三个 dex 全量恢复的字符串表（~17MB txt），可直接 grep 做
+                            字符串级检索（类名/方法名/常量命中），2026-09-11 产出
   comparison/ 对比结果 JSON（见下）
   captures/   实机抓包产物（flows *.mitm、登录密文/明文）——gitignore，含 PII+token
   tools/      对比与修复脚本（见下）
@@ -146,6 +148,6 @@ analysis/
 
 - 工具链均在 PATH：`apktool`、`jadx`、`java`、`python3`（Homebrew）。`adb`/`mitmproxy` 需自行安装：`brew install --cask android-platform-tools mitmproxy`（先用 `command -v` 验证）；沙箱内 adb 起不了 daemon（tcp:5037 被拦），本机执行需提权。
 - 反编译一份 APK：`apktool d 某.apk -o <dir>`、`jadx -d <dir> 某.apk`。
-- **反编译最新版内嵌底包 dex**：`jadx -d <out> --show-bad-code --no-res analysis/latest/origin_repaired_nomap/classesN.dex`（必须 nomap 变体，理由见目录语义）。
+- ⚠️ **不要再用 jadx 跑 origin_repaired_nomap / payload_dex_repaired_nomap**：454 与 452 payload dex 均被壳加密（at-rest 字符串池 ~60%/class_data ~100%），反编译产出全是空壳桩（2026-09-11 双路定案）。454 字符串级侦察改用 `grep` `analysis/latest/string_tables/dex_strings_*.txt`。
 - 解密抓包响应：`pbpaste | python3 analysis/tools/decrypt_xqr.py -`；或手册 §3.4 的 openssl 一行流（免装 pycryptodome，brew python 有 PEP 668 限制）。
 - 典型分析管线：`apktool d` → `manifest_diff.py` 对比 manifest；`archive_diff.py` 对比条目；对损坏 dex 先 `repair_dex_header.py` 再 `jadx`。
