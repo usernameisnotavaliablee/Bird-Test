@@ -323,3 +323,14 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 - **B 主线**：B1 nomap 反编译最新版 classes/classes2 → origin_jadx_fixed（闭环 Task #6）；B2 新版觅Ta 实现彻底分析（Mita_edit/MitaListBean 调用链+资源层文案+闸门点 = 第二阶段注入设计依据，Task #7）；B3 452 vs 454 归一化 diff（官方觅Ta 改动最小集）。
 - **C 静态到头**：VMP 方法体（150+ native，重打包者无需破）、服务端下发面（动态主线在测）、native 请求加密（Frida hook 路线已定）。
 - 建议：A/B 均为无实机依赖的纯计算，可与等用户开觅Ta开关重抓并行。
+
+---
+
+## 2026-09-11 · A/B 两路反编译并行开跑（用户指令：两个 subagent 各带一路、可自行再开 subagent）
+
+- 首轮 4 个 jadx 后台任务全失败：`-J-Xmx3g` 是 jadx 1.5.6 不认的参数（"Unknown option"）→ 去掉后重跑。
+- 主会话后台任务结果：**A1-classes2 = 1960 java ✅**；**B1-classes2 = 1947 java ✅**；A1-classes（原版 8.8M dex）exit=1/0 文件（由 A 路 agent 诊断重跑）；B1-classes 完成时补记。
+- 两个 general-purpose subagent 已派出（允许各自再开 subagent）：
+  - **A 路** = 原版 `payload_dex_repaired_nomap` 5 dex → `analysis/original/payload_jadx_nomap/`，验证 JsxqBean / KcbCxActivity / getGetXxxBean 日志串 / "TEST" 字面量 / GetTeaResume / AES key（首次产出 452 业务 Java 面）。
+  - **B 路** = 最新版 `origin_repaired_nomap` 5 dex → `analysis/latest/origin_jadx_fixed/`，验证 Mita_edit / MitaListBean / 旧 4 类确认删除 / 觅Ta 文案 / getMITA / AES key（Task #6 闭环，为 Task #7 觅Ta 新实现分析打基础）。
+  - agents 只写 jadx 输出目录、不 commit；HANDOFF 与 git 由主会话统一。
