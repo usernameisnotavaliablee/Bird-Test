@@ -334,3 +334,15 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
   - **A 路** = 原版 `payload_dex_repaired_nomap` 5 dex → `analysis/original/payload_jadx_nomap/`，验证 JsxqBean / KcbCxActivity / getGetXxxBean 日志串 / "TEST" 字面量 / GetTeaResume / AES key（首次产出 452 业务 Java 面）。
   - **B 路** = 最新版 `origin_repaired_nomap` 5 dex → `analysis/latest/origin_jadx_fixed/`，验证 Mita_edit / MitaListBean / 旧 4 类确认删除 / 觅Ta 文案 / getMITA / AES key（Task #6 闭环，为 Task #7 觅Ta 新实现分析打基础）。
   - agents 只写 jadx 输出目录、不 commit；HANDOFF 与 git 由主会话统一。
+
+---
+
+## 2026-09-11 · A 路结果：原版 payload 静态反编译 = 死路（半密文 dump），出路已定
+
+- 3496 java **全部空壳**：3493 个 JADX ERROR（Invalid LEB128），最大文件 <2KB，0 真实代码。7 项验证全空手：JsxqBean 只有空类声明、KcbCxActivity 无 tag、getGetXxxBean 25 条日志串 0 命中、TEST 0、GetTeaResume 0、AES key 0。
+- 根因链（agent A 诊断，主会话已复核 3493/3496 带 ERROR）：map-list 被壳破坏（count 恒 237、类型 0xfe/0xfd 垃圾、数据截断）→ nomap 置零让 callSiteOff/methodHandleOff 解析出越界偏移 → 更深一层：header/string_ids/class_defs 表完好，但**数据区部分加密**——三个 dex 字符串均为「前段明文+之后全无效」单一边界（classes.dex 23038/61552 有效、classes2 10545/40656、classes3 10810/28206），class_data 流 98% 无效，无单字节 XOR 密钥 = **壳解密完成前被 dump 的典型签名，密文静态不可恢复**。
+- classes.dex 的 OOM 是**内生**（垃圾 field/method 计数让 jadx 在 ListConsumer.init 分配巨型 ArrayList），全机唯一 jadx 重跑仍 <1 分钟 OOM——非并发内存问题（互斥锁仍是好实践）。
+- 替代路径（关键）：452 业务 Java 面**已存在**于 `analysis/modified/jadx/sources/` 与 `embedded_origin_jadx*`（改版=452 底包改造，JsxqBean/f9.a/h9.b/f3.b 均为真代码）→ 原版侧业务分析改用此树，不必等原版 dump。
+- 拿原版真实 Java 的唯一出路 = **重新动态脱壳**（待 app 完整运行、dex 全部解密后再 dump：FDEX2/Youpk 或晚时点 /proc/pid/mem 提取），或提取壳运行时密钥离线解密 APK 内加密 payload。纯静态无解。
+- 修正：此前 HANDOFF 记「A1-classes2 = 1960 java ✅」实为**空壳桩**——jadx 输出计数>0 不算成功，须抽查文件内容。
+- 已同步 CLAUDE.md 目录语义（payload_dex 注记半密文不可读）。

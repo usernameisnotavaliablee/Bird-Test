@@ -29,10 +29,14 @@ analysis/
   original/   原版.apk 的解包产物
     apktool/         apktool 反编译结果（AndroidManifest.xml + smali*）
     jadx/            jadx 反编译出的 Java 源码 + resources
-    payload_dex/     从加固壳中脱壳提取的真实 dex（classes.dex ~ classes5.dex）
+    payload_dex/     从加固壳中脱壳提取的 dex（classes.dex ~ classes5.dex）
+                      ⚠️ 数据区部分加密（壳解密完成前被 dump）：jadx 反编译 3496 java
+                      全为空壳桩（JADX ERROR），静态不可恢复；重新动态脱壳或
+                      提取壳密钥离线解密才有解。452 业务 Java 面改用
+                      modified/jadx 或 embedded_origin_jadx* 树
     payload_dex_repaired/         修复校验和的 dex
     payload_dex_repaired_nomap/   修复 + 损坏 map-list 置零 的 dex
-    payload_jadx*/                对应 payload dex 的 jadx 反编译 Java
+    payload_jadx*/                对应 payload dex 的 jadx 反编译产物（全部空壳桩，勿再跑）
   modified/  改版.apk 的解包产物（apktool/、jadx/、jadx_rawnames/）
     embedded_origin_*/  从改版内嵌文件（assets/SignatureKiller/origin.apk）中解出的
                         原始包，再分别经 apktool / jadx / 证书 处理
