@@ -306,3 +306,20 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 - 「已确认的总体结论」补最新版条目（官方加固包、觅Ta 重构为 Mita_edit+MitaListBean）。
 - 目录语义补 latest/（origin_repaired_nomap = jadx 唯一可用输入）与 captures/；根目录补 HANDOFF/AGENTS/实操手册 文档索引。
 - 工具表补 decrypt_xqr.py；新增「动态验证阶段关键事实」节（okhttp3 trust-all、AES key/IV、请求加密在 native 层、两关键端点、step=other 自检闸门、三层口径、合规边界）；环境命令补 adb/mitmproxy 安装与 nomap 反编译命令；修正重复编号（两个「### 5.」→ 5/6）。
+
+---
+
+## 2026-09-11 · 静态余量评估（/code 规划阶段，用户问「静态还能走多远」）
+
+### 磁盘核实（对照恢复清单逐项查状态）
+- `analysis/original/payload_jadx*` 四目录**全部 0 java** → 原版 payload 反编译从未成功，恢复清单 #4 根因坐实（未用 nomap 变体）；修复件 `payload_dex_repaired_nomap/` 已在盘、从未跑过 jadx。
+- 《数据面与监控组件深挖.md》无「三层口径」、无 JsxqBean 16 字段 → 恢复清单 #7 未落盘，§a.4 仍是旧 getter 口径（Gson 场景已证伪，会误导读者）。
+- 该 doc 0 处 VMP/kdvmp 提及 → 清单 #8（libkdvmp.so strings 抽查）未做。
+- `analysis/latest/` 无 origin_jadx_fixed → Task #6 未完成（仅 classes3 试跑 1550 java，产物已删；classes.dex/classes2.dex 未跑）。
+- 清单 #2（z7/n.java tel:/dh）、#5（MitaNew* 列表 Bean 普查）状态待查。
+
+### 静态余量分级（待用户选路）
+- **A 快赢**：A1 原版 payload_dex_repaired_nomap 全量 jadx → `payload_jadx_nomap/`（闭环 #4，为 454 diff 提供 452 对照树）；A2 JsxqBean 两树 diff（闭环 #6）；A3 三层口径+JsxqBean 16 字段写入数据面文档（闭环 #7）；A4 libkdvmp strings（闭环 #8）；A5 最新版 vs 原版 archive_diff（官方 452→454 壳层改动图）。
+- **B 主线**：B1 nomap 反编译最新版 classes/classes2 → origin_jadx_fixed（闭环 Task #6）；B2 新版觅Ta 实现彻底分析（Mita_edit/MitaListBean 调用链+资源层文案+闸门点 = 第二阶段注入设计依据，Task #7）；B3 452 vs 454 归一化 diff（官方觅Ta 改动最小集）。
+- **C 静态到头**：VMP 方法体（150+ native，重打包者无需破）、服务端下发面（动态主线在测）、native 请求加密（Frida hook 路线已定）。
+- 建议：A/B 均为无实机依赖的纯计算，可与等用户开觅Ta开关重抓并行。
