@@ -296,3 +296,13 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 1. 开觅Ta开关 → 搜同学入口点人 → 抓 baseInfoServlet → decrypt_xqr.py 判定宽窄。
 2. 教师简历弹窗抓 GetTeaResume 明文数 16 键。
 3. mitmproxy Replay 原样重放测时效校验；路线 Z 搜自己点自己做只碰自己数据的宽行复证。
+
+---
+
+## 2026-09-11 · CLAUDE.md 更新：纳入动态验证阶段与续接工作流
+
+- 新增「会话入口与工作流」节（HANDOFF 第一入口 / 每步记 HANDOFF / 立即 commit / subagent 并行 / gitignore 边界）。
+- 项目概述补三 APK 版本序（435<452<454）与两阶段（静态完成 / 动态验证为当前主线）。
+- 「已确认的总体结论」补最新版条目（官方加固包、觅Ta 重构为 Mita_edit+MitaListBean）。
+- 目录语义补 latest/（origin_repaired_nomap = jadx 唯一可用输入）与 captures/；根目录补 HANDOFF/AGENTS/实操手册 文档索引。
+- 工具表补 decrypt_xqr.py；新增「动态验证阶段关键事实」节（okhttp3 trust-all、AES key/IV、请求加密在 native 层、两关键端点、step=other 自检闸门、三层口径、合规边界）；环境命令补 adb/mitmproxy 安装与 nomap 反编译命令；修正重复编号（两个「### 5.」→ 5/6）。
