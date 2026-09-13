@@ -16,7 +16,7 @@
 
 ### 已确认的关键事实（侦察 + 双代理核实）
 1. **最新版 = 官方加固包**：`com.nesun.stub.ZAP` 壳桩，业务代码在内嵌 `assets/origin.apk`（5 dex，classes.dex 8.88M/classes2 7.85M/classes3 4.48M/classes4+5 损坏残留），签名 `KINGOKEB.RSA`（与原版同证书），**未被改版式篡改**。minSdk=23。
-2. **觅Ta 已重构**：旧 4 类（TeaInfoActivity/TdkbActivity/MitaNewActivity/MitaNewListActivity）在最新版 payload 三层（class_defs/type_ids/字符串）**全部 0 命中，官方已删除**；`new_kebiao` 包无类定义。新实现 = `Mita_edit`（EditText 视图，ui/view/new_view/）+ `MitaListBean`（bean，bean/jsjy/bean/）。`MiTaUtil` 仅源文件名字符串。弹窗文案在资源层不在 dex。
+2. ~~**觅Ta 已重构**：旧 4 类（TeaInfoActivity/TdkbActivity/MitaNewActivity/MitaNewListActivity）在最新版 payload 三层（class_defs/type_ids/字符串）**全部 0 命中，官方已删除**；`new_kebiao` 包无类定义。~~ ❌ **此条已于 2026-09-13 被推翻**：「0 命中」= 混淆名落进加密区，≠ 类被删除；454 manifest 仍声明全部 21 个 `new_kebiao` 活动。详见文末「崩溃会话复原」节。新实现 = `Mita_edit`（EditText 视图，ui/view/new_view/）+ `MitaListBean`（bean，bean/jsjy/bean/）（此半句未被推翻）。`MiTaUtil` 仅源文件名字符串。弹窗文案在资源层不在 dex。
 3. **版本序**：最新版 2.6.454(181) > 原版 2.6.452(178) > 改版 2.6.435(164)。最新版与改版前底包高度同源（dex 大小几乎一致）。
 4. **工具链**：apktool 3.0.3 / jadx 1.5.6 / JDK 21 / keytool / openssl / python3 3.14 ✅；**缺 apksigner/zipalign/SDK**（签名环节需补）。
 5. **卡点**：`analysis/latest/origin_jadx*` 三次 jadx 反编译全空（sources 0 文件）——内嵌底包 dex 反编译尚未成功。
@@ -357,3 +357,52 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 - 资产保留：三个 dex 全量恢复字符串表已从 /tmp 转存 `analysis/latest/string_tables/`（dex_strings_classes*.dex.txt，共 ~17MB，可直接 grep 做字符串级检索）；6 个诊断脚本在 `~/ClaudeCode/dex_*.py`。
 - 454 代码面静态出路（按性价比）：① 字符串表侦察（已具备）② class_defs/type_ids 级 452↔454 diff（结构表完好）③ origin.apk 资源层解码（弹窗文案可能可读，未试）④ 动态 dump（Frida FDEX2/Youpk 或晚时点 /proc/pid/mem，需 root；实机链路已打通）或逆壳解密器离线解密。
 - 已同步 CLAUDE.md（454 壳加密结论 + Mita_edit 修正 + 目录语义/环境命令更新为勿再跑 jadx）。
+
+---
+
+## 2026-09-13 · 崩溃会话复原：L1–L4 侦察结论打捞（**含两条推翻既有结论的修正**）
+
+### 背景：上一个 session 死于上下文溢出，两小时侦察结论从未落盘
+- 崩溃会话文件：`~/.claude/projects/-Users-mac-Documents---/bba6d90f-e68f-4724-ad1d-f529dddbbfa2.jsonl`（825 行 / 4.9MB / slug `nifty-sleeping-balloon` / 2026-09-11 20:01→23:39）。
+- 时间线：20:10 `/init`(`209f1de`) → 20:14 静态余量评估(`c0b7ddf`) → 20:22 `/goal 两路一起跑` → 20:52 A 路定案(`e39f557`) → 21:03 B 路定案(`16843e1`) → **22:08 用户提出 L1–L4 四层框架，侦察启动** → 22:08–23:28 侦察 80 分钟 → 23:28 `API Error: 400`（1M 上下文打满，请求 1049130）→ 23:34–23:37 `/compact` 三次全失败（同为 400）→ 23:39 用户改求 2000 字摘要，仍被 400 挡掉，会话终结。
+- **丢失边界（mtime 判定）**：`HANDOFF.md`/`CLAUDE.md` 停在 21:03（= 末次 commit `16843e1`），新工具时间戳为 22:46–23:25 → **22:08 之后两小时侦察，结论从未送达用户、也从未写入任何文档**。
+- 原始侦察输出已导出：`/tmp/prev_session_recon.txt`（159KB，86 个工具结果块，按 `===== L<行号> =====` 分块）。
+
+### 修正一：❌「454 旧 4 类已删除」证据不足（旧结论大概率错误）
+- **反证 A**：454 全量 manifest `analysis/latest/jadx/resources/AndroidManifest.xml` 声明**全部 21 个** `new_kebiao` 活动，明确含 `MitaNew2Activity`/`MitaNewActivity`/`MitaNewListActivity`/`TeaInfoActivity`/`TdkbActivity`/`TdkbMainActivity`/`ClassmateInfoActivity`/`TaWeekCourseActivity`；**这些均无 `enabled="false"`**（全 manifest 仅 `XqjsActivity` 一个 activity 被禁用）。注：`analysis/latest/apktool_nores/AndroidManifest.xml` 是壳的极简 manifest（0 个 new_kebiao），勿误用。
+- **反证 B（决定性）**：452（确认可运行的官方包）对这些类名在字符串表**同样 0 命中** → **「0 命中」= 名字落进加密区，≠ 类被删除**。旧结论把观测假象读成了删除。
+- 结论：454 觅Ta 相关类**很可能仍在**（混淆改名 + 落进加密区），新闸门形态仍未知。
+
+### 修正二：❌「自检主体 `y8/s0` 与 `z7/v` 已删」不成立（是改名非删除）
+- 435 侧 `y8/s0` = 9 类簇，`source_file` 全标 `MiTaUtil.java`；452/454 侧对应 `Lt9/t0` 簇，**逐类 (fields, methods) 完全一致**（f=0/2、3/2、4/2…），且 454 侧 `Lt9/t0` 的 `source_file` 也标 `MiTaUtil.java`。
+- → 435 可读名 → 452/454 混淆名的**改名**，类体仍在。
+- ✅ `a2/a` 仍在（旧结论正确）：`La2/a` 在 452/454 classes.dex 均可读，idx 12866 / 12959。
+
+### 新证据（已坐实）
+1. **452 与 454 是同一个壳版本**（主会话 2026-09-13 复核）：`libzprotect.so` md5 跨 452/454 逐 ABI 相同（arm64 `340f588e6634068a136cf9317cefb5b6` / 317896B；v7a `9087c35999d12911e865485b6a9da7b3` / 182252B），`libJNIEncrypt.so` 亦同（arm64 `c92083c5316329e3127954c913cc5dbf` / 30560B）。字符串坐实 `/data/data/%s/.zprotect/%s/origin.apk`、`libso.zip`、`InMemoryDex`、`libzprotect` → **解压到私有目录 (.zprotect/<seed>/) 再内存加载**。仅 `ZAP.zVersion` 种子不同（1778845091400 / 1786558351834）。→ **454 壳层分析可完全复用 452 资料**。
+2. **密文区不是压缩数据**：`zlib_scan` 扫 6 个 dex（452 payload×3 + 454 origin×3）压缩流命中**全为 0**。壳库自带解压能力（`inflate`/`inflateEnd`/`inflateInit2_`/"Zlib error"，Obfuscator-LLVM 9.0.1 标记）→ 找 zlib 流、通用解压离线解密的路**已排除**，只剩逆 `libzprotect.so`。
+3. **密文占比量化**（可读串/总串）：452 = classes 22917/61552、classes2 10572/40656、classes3 10814/28206；454 = 23111/62031、10521/40443、11694/28861 → 密文占 **60–74%**，classes2 最重。class_defs 级类名可读率：452 = 100%/47.2%/95.8%，454 = 100%/46.9%/100%。
+4. **密文呈「前缀可读 + 单一边界」**：两版类描述符表尾段 UNSORTED、末 10 条为二进制垃圾；classes2 可读串首字符 `L` 占 ~55%；452 与 454 尾部偏移镜像（…40643/40644/40650 vs …40430/40431/40437）。
+5. **方法突破——「无名形状 diff」可行**：加密只覆盖字符串/类名，**class_defs 顺序与 class_data 形状仍可读**。已对位成功：452 classes2 `[6246,6267)` 与 454 `[6223,6244)` 的 21 类 (f,m) 序列逐项相同，且与 435 `MitaNew2Activity` 簇（宿主 f=37 m=28）吻合。健康类簇尺寸三方一致（Jskb 19/19/19、JskbDetail 15、ClassmateInfo 25、Bjkb 9）。**435 侧 new_kebiao 共 242 类/20 簇 → 435 可作形状基线**。
+6. **454 相对 452 的真实增量**（数据面清晰，无实机依赖）：activity 694→701（+`KtlxJsNew`、`YnzdYdtj`、4 个 `bdsyq *Test`、`LowCodeTest`、`Grxx`、`FcGrid`、`NativeTabs`、`ComponentActivity` 等），provider +1（华为 `MLInitializerProvider`），receiver/service 不变；assets +`lowcode*.json` ×11；res diff 316 行；**mita 布局与资源 md5 完全不变**（`activity_mita_new2` `21c37b…`、`new_list` `5acb1c…`）→ **该域零差异**。
+7. **环境**：本机**无 frida**（仅 `/opt/homebrew/bin/adb` 1.0.41），磁盘余 45–48G。公开检索「libzprotect.so 脱壳」「com.nesun.stub ZAP」**均无命中**，无现成方案；仅可参考易盾 `libnesec.so`（`.gnu.fragment` 内加密+zlib）与「数字加固 StubApp」。→ **「Frida 动态 dump」这条路的启动成本被坐实**（需先装 frida + root）。
+
+### 未验证 / 存疑（**勿当结论使用**）
+- `Lt9/t0 = MiTaUtil` 仅靠形状 + source_file 推断，**未读代码**。
+- 新证据 5（形状可读）与 CLAUDE.md 旧述「class_data ~100% 密文」**存在张力，未解决**，需复核。
+- 454 classes3 类名 100% 可读 vs 452 95.8%（196 隐藏）的差异**未解释**；452 classes3 某区间报「描述符有、class_defs 0」，**工具语义可疑**。
+- 435 apktool 树 grep `MitaNew*/TeaInfo/Tdkb` smali 全 no matches，与 jadx 树有同名 `.java` **矛盾 → 该次验证无效**（工具/路径问题，非「类不存在」）。
+- Frida 可行性仅一次环境检查且输出截断，**未实测**。
+- 被截断的命令输出：L806（`q4/y8/z7` 前缀命中，只剩空表头）、L699（frida Traceback 后截断）、L641 明示截断、L488（三行计数无标签）。
+
+### 磁盘残留（本次一并入库）
+- 已入 `analysis/tools/`：`manifest_components_diff.py`、`dex_shape_probe.py`、`dex_string_dump.py`、`zlib_scan.py`、`dex_class_span.py`、`dex_class_band.py`
+- 已入 `analysis/comparison/`：`embedded_origin_vs_454.manifest_components.json`（activity 673→701、provider 10→11、receiver 25→25、service 23→23，removed 全空）、`official_452_vs_454.manifest_components.json`
+- **仍散落 `~/ClaudeCode/`（未归档，下次清理）**：`shape_diff.py`、`source_file_probe.py`、`cluster_walk.py`、`enum_435_newkebiao.py`、`compare_shapes.py`
+
+### 下一步（按性价比）
+1. **复核「形状可读 vs class_data 密文」的矛盾**——这条不解决，新证据 5 不能用于任何结论。
+2. **用 435 形状基线给 452/454 加密区逐簇命名对位**，把「454 觅Ta 类仍在」从推断升级为坐实。
+3. 字符串表侦察（`analysis/latest/string_tables/`）+ `manifest_components_diff.py` 已具备，可继续 452↔454 结构级 diff。
+4. 动态主线不变：实机抓包 `baseInfoServlet?step=other` / `GetTeaResume`（见 `实操手册.md`）。
+5. 环境补装 `frida`（动态 dump 前置）+ `mitmproxy`。

@@ -1,0 +1,57 @@
+{
+  "activity": {
+    "left_count": 673,
+    "right_count": 701,
+    "added": [
+      "com.huawei.hms.hmsscankit.ScanKitActivity",
+      "com.kingosoft.activity_kb_common.ui.Component.activity.ComponentActivity",
+      "com.kingosoft.activity_kb_common.ui.Component.activity.FcGridActivity",
+      "com.kingosoft.activity_kb_common.ui.Component.activity.NativeTabsActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.cq.CqSzztActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.fdybsdt.sh.LclbByTabActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.frame.ServicePageBjGzfwActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.frame.ServicePageByMkActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.frame.ServicePageGzfwActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.jxgc.activity.KtlxJsNewActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.new_wdjx.new_kebiao.GrxxActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.stfk.StfkCkNewActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.stfk.StfkCkXqActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.stfk.StfkTjNewActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.wsxk.XklcActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.xsqj_new.QjjlNewBActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.xsqj_new.XjActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.ynzd.YnzdActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.ynzd.YnzdYdtjActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.ynzd.YnzdtjActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.zdyView.ZdyShrActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.zxsj.ZxsjActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.AdvancedStorageTestActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.ExpressionTestActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.LowCodeBackTestActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.StorageEngineTestActivity",
+      "com.kingosoft.zdykj.lowcode.LowCodeTestActivity",
+      "com.kingosoft.zxing.huawei.DefinedActivity"
+    ],
+    "removed": []
+  },
+  "provider": {
+    "left_count": 10,
+    "right_count": 11,
+    "added": [
+      "com.huawei.hms.mlsdk.common.provider.MLInitializerProvider"
+    ],
+    "removed": []
+  },
+  "receiver": {
+    "left_count": 25,
+    "right_count": 25,
+    "added": [],
+    "removed": []
+  },
+  "service": {
+    "left_count": 23,
+    "right_count": 23,
+    "added": [],
+    "removed": []
+  }
+}

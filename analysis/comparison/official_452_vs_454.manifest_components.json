@@ -1,0 +1,34 @@
+{
+  "activity": {
+    "left_count": 694,
+    "right_count": 701,
+    "added": [
+      "com.kingosoft.activity_kb_common.ui.activity.jxgc.activity.KtlxJsNewActivity",
+      "com.kingosoft.activity_kb_common.ui.activity.ynzd.YnzdYdtjActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.AdvancedStorageTestActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.ExpressionTestActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.LowCodeBackTestActivity",
+      "com.kingosoft.zdykj.bdsyq.activity.StorageEngineTestActivity",
+      "com.kingosoft.zdykj.lowcode.LowCodeTestActivity"
+    ],
+    "removed": []
+  },
+  "provider": {
+    "left_count": 11,
+    "right_count": 11,
+    "added": [],
+    "removed": []
+  },
+  "receiver": {
+    "left_count": 25,
+    "right_count": 25,
+    "added": [],
+    "removed": []
+  },
+  "service": {
+    "left_count": 23,
+    "right_count": 23,
+    "added": [],
+    "removed": []
+  }
+}
