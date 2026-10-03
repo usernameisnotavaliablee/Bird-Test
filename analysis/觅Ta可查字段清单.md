@@ -23,7 +23,7 @@
 | 11 | **黑名单关系** `flag` | action=judgeBlackList | 强 |
 | 12 | **教师公开简历**：性别/出生年月/学历/学位/入校年份/民族 | oriHd_ggym&step=GetTeaResume | 强（展示面 6 项） |
 | 13 | **教师简历解析面扩展字段**：**身份证号 sfzh** / **电话 dh** / 籍贯 jg / 年龄 nl / 职称 zc / 岗位 gw / 照片 img / 院系 yx / 是否在岗 sfzg | 同一响应，Gson 转 `JsxqBean.ResultSetBean` | 强（Bean 有字段，全树 getter 0 调用）／下发面未知 |
-| 14 | **课程详情**（点课表内某门课）：KcxqCopyBean 全字段（课程名/教师/上课地点/时间/学分/课程性质…） | oriHd_kc&step=getCourse_Detail_hd | 强 |
+| 14 | **课程详情**（点课表内某门课）：`KcxqCopyBean` 课程名/英文名/承担单位/简介/学分/总学时/上机学时/其它学时/课程代码/先修课程/替代课程/教材（名称·代码·出版社·定价） | oriHd_kc&step=getCourse_Detail_hd | 强 |
 | 15 | **收藏课程**（对方收藏的课） | kingo_course&step=course_shoucang_* | 中（u8/v.java 可读） |
 | 16 | **学期列表** `xnxq[{dm,mc}]`、**节次/教室** `jcbw/jcsw/jcws/jcxw/jczs/jczw/jcflag` | 课表链路（本条属课表，列出仅为完整） | 强 |
 | 17 | **籍贯 / 专业 / 入学年级 / 姓名 / 性别 / 身份** | **作为搜索条件**（=服务端可检索字段，可当"验证 oracle"用） | 强（布局恒定） |
@@ -44,7 +44,7 @@
 | `MitaNew2Activity`（新搜索页） | 按条件找 Ta | 搜索请求**构造代码是 native**（`k2()/l2()/o2()/p2()`），仅回调可见：响应 `{result:{flag,msg,data[]}}`（`MitaNew2Activity.java:266-288`）；`xnxq` 学期下拉（:184-189） |
 | `MitaNewListActivity` | 搜索结果列表 | `wapController.jsp action=getSettings step=getMITA`（`MitaNewListActivity.java:120-132`）；列表项 = `BbsBean` |
 | `MitaNewActivity`（旧档案页） | Ta 的档案 | `getMITA`（:422-434）；档案数据回调 `i`（:455-470）→ `rxnj/yx/zy/ssbj`；筛选下拉 `resultSet[{nj}]`、`[{dm,mc}]`、`xnxq`（回调 `j/k/l`） |
-| `ClassmateInfoActivity`（学生信息页） | 目标详细信息 | `baseInfoServlet step=other`（`t9/t0.java:82,166` → `e2/a.java:585/601/617`）；`judgeBlackList`（:534/645） |
+| `ClassmateInfoActivity`（学生信息页） | 目标详细信息 | `baseInfoServlet step=other`（`t9/t0.java:82,166` → `e2/a.java:585/601/617`）；`judgeBlackList`（:534/645）；**自身另有一条 native 主信息请求（回调 `l`/`m`），URL 静态不可见，见 §5 证据等级** |
 | `TeaInfoActivity`（教师信息页） | 同上 | 同上 + `GetTeaResume`（`x3/b.java`） |
 | `TdkbActivity` / `TaWeekCourseActivity` | 课表（排除项） | `resultSet`/`state`；`xnxq` + 节次字段 |
 | `x3/b`（JsxqDialog） | 教师简历弹窗 | `oriHd_ggym&step=GetTeaResume&jsid=&userid=`（:151-167） |

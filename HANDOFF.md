@@ -782,3 +782,47 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 - `ClassmatesGridActivity` 点人**不经任何开关闸门直接跳信息页**（`ClassmatesGridActivity.java:96-105`）——闸门只在信息页内部。
 - 新增两个可查面：**同班同学名录** `StudentListBean.classmatesList[].xm/xb/bjmc/yhxh/entertime/islive`（Gson，Java 直证）；**扫码身份页** `GrxxActivity` 布局静态 5 行 = 学校/工号/学号/姓名/身份。
 - 现有抓包 `captures/flows_20260910_mitm.bin` **无任何觅Ta 流量**（getMITA/judgeBlackList/baseInfoServlet 0 命中）→ native 部分无动态补证，须重抓或 hook `da.b`。
+
+## 2026-10-03 · 452 payload 离线解密成功 + 「学业成绩：等级分 vs 原始分值」溯源（改版零改动）
+
+记录时间：2026-10-03T23:45:00+08:00。触发：用户提问「似乎改版与原版在成绩查询上有区别，原版『学业成绩』页面只能查到等级分（A/B/C…），改版可以查到原始分值」。
+
+### 一、方法论突破：**原版 2.6.452 的加固 payload 已可离线解密**（旧「静态不可读」结论作废）
+
+- 规则（454 明文/密文逐字节对照坐实，3 个 dex 零反例）：壳只对 dex 的**尾部一段**做**按位取反**，且 **跳过 0x00 / 0xFF**：
+  - `off <  T`：明文原样
+  - `off >= T`：`enc = p`（p∈{00,FF}）；否则 `enc = ~p`
+  - 映射是双射 → 解密无歧义：`p = enc`（enc∈{00,FF}），否则 `p = ~enc`
+- T 定位：dex 头/ids/class_defs 都在加密区之前，可直接解析 `string_ids`；工具链按索引顺序排布 `string_data_item`，**第一个解不出的字符串**必然横跨 T，在该 item 字节范围内枚举 T，用「全表字符串自洽 + 头部 SHA-1/Adler-32 重算吻合」判定。
+- 工具入库：`analysis/tools/unmask_zprotect.py`（含 `--selftest`，用 454 产物自检通过）。
+- 452 五个 dex 全部解密并**逐字节校验通过**（header SHA-1 + Adler-32 双吻合）：
+  `analysis/original/payload_plain/classes{,2,3,4,5}.dex`（T=2210749 / 1967924 / 1083251 / 3821 / 3625）
+  → jadx 产物 `analysis/original/payload_plain_jadx/sources`（10,164 个 java，`analysis/original/` 已 gitignore）。
+- **副产品**：452 的业务代码命名与 454 一致（`t9/w6/da/x8/q7`），因此 452 可与 454 直接逐文件对比；435 与 452/454 之间只差混淆重命名。
+
+### 二、结论：**成绩查询差异不来自改版，也几乎不来自版本代码**
+
+1. **改版侧零改动**：改版 vs 内嵌底包(435) 归一化 diff —— `ui/activity/score` 全等；整个 `com/kingosoft` 业务面 2504 文件只有 8 个差异（BaseApplication=killer、5 个觅Ta门禁类、FdybsdtShActivity、.DS_Store），**成绩模块无一改动**。
+2. **435 vs 452 成绩面功能等价**（本次用解密后的 452 代码逐页核对）：`score/StuScoreActivity`、`YscjFragment`、`YxcjFragment`、`d6.a|w6.a`(StuScoreAdapter)、`d6.b|w6.b`(StuScoreModel)、`StuScoreBean`、`cjfb/*`（成绩分布/详情）、`xscj/*`（查看成绩/详情）、`XSCJFB/*` 全是重命名/renumber 噪声，无逻辑差异。
+3. **请求面逐字相同**：`POST {serviceUrl}/wap/wapController.jsp`
+   `action=getStucj & step=detail & xnxq & flag & userId & usertype`
+   （435 `d6/b.java:86-102` ≡ 452 `w6/b.java:87-103`）。响应为明文 JSON，取 `xscj[]`，客户端**只显示 `kscj`**，`kscjm` 仅用于「<60 标红」。
+4. **「等级分 vs 原始分值」= 页面里本来就有的两个 tab / 两次请求的 `flag`**：
+   - tab「**有效成绩**」→ `flag=1` → 学校发布的最终有效成绩（等级制学校即 A/B/C）；
+   - tab「**原始成绩**」→ `flag=0` → 平时/中考(期中)/末考/技能 等**原始分值**；
+   - 外部佐证：`lizhengqiang/kingosoft_api`（喜鹊儿接口封装）注释「flag 可取[0,1]，分别代表[原始成绩,有效成绩]」，且其请求串与 App 完全同构；
+   - App 自身佐证：`res/layout/activity_xscj_xq.xml`（成绩详情）把两块并排——「原始成绩」区=平时/中考/末考/技能/综合，「有效成绩」区=有效成绩/学分绩点/修读类别。
+   - 默认高亮在 `general_list_with_select_1_score.xml` 里是 `tab_yxcj`（有效成绩，`theme_mint_blue`）。
+5. 因此用户看到「一边只有等级、一边有原始分」，只可能是：**(a) 看的是不同 tab**；或 **(b) 服务端按客户端版本下发不同内容**（请求里确实带版本：`appinfo = "Android"+版本`、`appver=2.6.435|2.6.452`）；或 **(c) 账号/学校不同或学校刚切等级制（时间差）**。三者都与改版的注入无关。
+6. 服务端缓存排除：抓包登录响应 `cache.jklist` 11 条里**没有 `getStucj`** → 成绩无服务端缓存 TTL，不是「旧缓存显示分数」那类假象。
+
+### 三、真实存在的 435→452(→454) 成绩模块差异（顺带查清，均与等级无关）
+
+- 「有效成绩」tab 顶部**汇总信息**：435 客户端自己求和（学分/获得学分/取得绩点/获得学分绩点/获得平均学分绩点，`DecimalFormat`，并优先用响应顶层 `zxf/hdxf/qdjd/hdxfjd/hdpjxfjd`）；452 起 `stuscore_yx_head.xml` **删掉这 5 个标签**，`YxcjFragment` 不再计算，改为展示服务端 `extend[]`(lable/value) 汇总项。
+- 454 才新增 `kcsx`（课程属性）字段解析与展示；435/452 的 `StuScoreBean` 完全一致。
+- 全库无任何「等级/分数显示开关」；`dj`（等级）只出现在**成绩分布**模块 `bean/cjfb/bean/CjBean{dj,sl,bfb}`（`Cjoption` 里出现「等级」字样）。
+
+### 四、下一步（需要用户/真机）
+
+1. 让用户确认两侧看的是不是同一个 tab；要定论就按 `实操手册.md` §4 抓一次：同一账号、同一台机、两个 APP 各开一次「学业成绩」，对比 `getStucj&step=detail` 的 `flag=0/1` 两次响应里的 `kscj`/`kscjm`（明文 JSON，`python3 analysis/tools/decrypt_xqr.py -` 不需要，直接看即可）。
+2. 452 已可静态读码 → 之前「452/454 业务面不可读」的遗留问题（如 454 觅Ta 新闸门形态、454 vs 452 逐类差异）现在都能做；454 侧同样可用 `unmask_zprotect.py`（`analysis/latest/unpacked/zprotect/*` → 明文）。
