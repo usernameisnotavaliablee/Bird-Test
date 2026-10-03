@@ -728,3 +728,12 @@ apktool d -f -o /tmp/qx_build/flat /tmp/qx_build/base_flat.apk
 python3 patch/patch_gates.py /tmp/qx_build/flat
 QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ```
+
+### 六、A/B 对照证据（同一模拟器，先原版后成品）
+
+| 包 | 首页标题栏 uiautomator 命中 | 截图 |
+|---|---|---|
+| 官方 最新版.apk（原版） | 仅 `text="Home"`（无觅Ta 节点） | `patch/evidence/original_454_home_no_button.png` |
+| 成品 qx-454-mita.apk | `text="Home"` + `text="觅Ta" clickable="true" bounds="[841,66][970,187]"` | `patch/evidence/home_button_flatten_build.png` |
+
+未做的验证：模拟器上**没有可用账号**（登录页要求先选学校；工作区只掌握 CTF 阶段 PC 端账号 1981448/a 与抓包里的 userid，无 App 密码），因此「登录后首页/觅Ta 各页正常」「对方未开觅Ta 时服务端是否下发数据」两条留待真机+真实账号，流程见 `实操手册.md` 第四节。
