@@ -676,3 +676,55 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 ### 合规边界（不变）
 
 回放/构造请求只用本人 uuid；抓到他人数据只记键名不存值；结论向校方/青果负责任披露，不公开密钥与 exploit 细节。
+
+---
+
+## 2026-10-03 · 阶段二完成：去壳扁平化 + 掏门禁（17 处跳转）+ 全链路模拟器验证
+
+记录时间：2026-10-03T22:50:00+08:00。承接上一节，本轮把「按改版方式改造最新版」整条链路做完并验证。
+
+### 一、成品
+
+`patch/out/qx-454-mita.apk`（74,193,059 B，v1+v2+v3 自签）＝ **官方 2.6.454 去壳扁平化 + 觅Ta 门禁掏空 + 首页右上角「觅Ta」按钮 + 签名自检绕过**。
+
+构建：`QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh`（源码/脚本入库；产物 gitignore）。
+
+### 二、做了什么
+
+1. **去壳扁平化（照改版配方）**：外层 dex ← 明文业务 dex（classes.dex~classes5.dex，共 7 个 dex，classes6=killer、classes7=qx 注入层）；manifest `application` `com.nesun.stub.ZAP` → `com.kingosoft.activity_kb_common.BaseApplication`；删 `lib/*/libzprotect.so` 与 `assets/origin.apk`；壳 stub dex 全部丢弃。
+2. **掏门禁 17 处跳转（14 个类）**：`patch/patch_gates.py`（幂等）。手法与改版一致——把闸门判断后的 `if-eqz <stateFlag>, :bad` 换成 `nop`，永远走 "已开启" 那条路，弹窗成死代码：
+   - 目标方 state：`MitaNewActivity$h$a`、`MitaNewListActivity$a$a`、`TdkbActivity$b`、`ClassmateInfoActivity$l/$m`、`TeaInfoActivity$j/$k`、`w8/b$a$a`、`e2/a$e`
+   - 自己开关提示：`t9/t0$a`、`t9/t0$b`（原 y8/s0 改名簇）
+   - 隐私门（"由于对方设置【觅TA】隐私开关…"）：`e2/a$g` 两处入块跳转抹平
+   - "您的/对方的觅Ta开关未开启" 守卫块：`TeaInfoActivity$b`、`ClassmateInfoActivity$a`（各 2 处）
+3. **首页入口按钮**：`res/layout/home_page_grid.xml` 标题栏右侧插 `qx.MitaEntry`（点击 → `MitaNew2Activity`），不依赖任何业务代码钩子。
+4. **签名自检绕过**：provider `qx.Boot`（`AndroidManifest.xml` 里声明）在 Application 之前跑 `Class.forName("bin.mt.signature.KillerApplication")`（复用改版 smali），只走 Java 层 `PackageInfo.CREATOR` 伪造。
+
+### 三、验证证据
+
+- **模拟器回归（去壳版）**：安装 0 报错；启动后 0 次进程自杀；`topResumedActivity=LoginActivity`（无壳也能起）；`qx: Boot.onCreate` / `killer: static init ok` 均打印。
+- **首页按钮**：`adb shell am start …/.ui.activity.frame.Main` → uiautomator 命中 `text="觅Ta" clickable="true" bounds="[841,66][970,187]"`（紧邻原「更多」按钮 [981,66][1044,187]）；`input tap 905 126` → `topResumedActivity=MitaNew2Activity`，logcat `qx: mita entry: start …MitaNew2Activity`。截图存 `patch/evidence/`。
+- **掏门禁静态复核**：把成品里的 classes2/classes3.dex 重新 jadx，闸门处已是改版同款形态——`new JSONObject(str).getString("state").equals("1");`（裸语句，`JADX WARN: Unreachable blocks removed`），`未开启【觅Ta】…`/`您是否要开启…` 文案在 5 个闸门类里全部消失（成死代码被 jadx 剔除）。
+
+### 四、尚未验证 / 边界
+
+1. **服务端行为仍需真机+真实账号**：客户端闸门掏空只证明"点得进去"，对方未开觅Ta 时服务端是否下发数据（宽行/窄行）仍需实机抓包（`实操手册.md` 第四节流程不变）。
+2. 模拟器上登录页之后的真实数据流无法验证（无账号）；`MitaNew2Activity` 顶部出现"学校教务系统接口版本太低，点此切换旧版本"红条是**未登录/测试校**状态，非本改动引入。
+3. 未走 native 签名绕过（libSignatureKiller + 80MB origin.apk）：实测 Java 层够用，故未加，成品体积因此小 ~80MB。
+4. 仍需真机确认的：真实账号登录后首页/觅Ta 各页面正常；`MitaNew2Activity` 搜索→列表→课表/信息页全链路。
+
+### 五、复现步骤（从零）
+
+```bash
+# 1) 明文 dex（需要一台 arm64 安卓机/模拟器跑一次脱壳包）
+bash patch/build.sh dump && bash patch/device.sh install-dump   # 打开 App 等 25s
+bash patch/device.sh pull                                        # -> analysis/captures/qxdump-*
+python3 patch/decrypt_zprotect.py <zprotect/classesN.dex> <dex/mem_*.dex> <plain/classesN.dex>
+# 2) 扁平化 + 掏门禁 + 按钮 + 签名
+python3 - <<'PY'   # 把明文 dex 塞回官方包外层，生成 base_flat.apk
+...（见本次执行记录：替换 classes.dex~classes5.dex）
+PY
+apktool d -f -o /tmp/qx_build/flat /tmp/qx_build/base_flat.apk
+python3 patch/patch_gates.py /tmp/qx_build/flat
+QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
+```
