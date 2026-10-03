@@ -774,3 +774,11 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 
 1. 真机 + 真实账号抓包（`实操手册.md` 第四节）：验 ① `step=other` 对未开觅Ta 对方的下发宽窄行；② 他人信息页动态行实含标签；③ `GetTeaResume` 是否真下发 `sfzh/dh/jg`；④ 觅Ta 搜索的 action/step。
 2. 若要继续静态深挖，唯一路径是逆 `libkdvmp.so`（VMP 解释器）或 hook native——成本高，非必要不做。
+
+### 六、补充（两个子代理收口后并入）
+
+- 查他人链路请求组合：Java 可见 **7 组** + native 不可见 **2 处**（信息页主请求、加黑名单）→ ≤9 组。**TdkbMainActivity 无任何 HTTP**（demo 存根）。
+- 信息页主请求（`ClassmateInfoActivity` 回调 `l`/`m`）的 URL 在 native，**"= step=other" 属高置信非直证**（靠 `t9/t0` 闸门 Java 调用 + 435/452 旧比对支撑），已在清单 §5 标注证据等级。
+- `ClassmatesGridActivity` 点人**不经任何开关闸门直接跳信息页**（`ClassmatesGridActivity.java:96-105`）——闸门只在信息页内部。
+- 新增两个可查面：**同班同学名录** `StudentListBean.classmatesList[].xm/xb/bjmc/yhxh/entertime/islive`（Gson，Java 直证）；**扫码身份页** `GrxxActivity` 布局静态 5 行 = 学校/工号/学号/姓名/身份。
+- 现有抓包 `captures/flows_20260910_mitm.bin` **无任何觅Ta 流量**（getMITA/judgeBlackList/baseInfoServlet 0 命中）→ native 部分无动态补证，须重抓或 hook `da.b`。

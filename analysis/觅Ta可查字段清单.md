@@ -29,6 +29,8 @@
 | 17 | **籍贯 / 专业 / 入学年级 / 姓名 / 性别 / 身份** | **作为搜索条件**（=服务端可检索字段，可当"验证 oracle"用） | 强（布局恒定） |
 | 18 | 个人相册 / 随手记 / 跳蚤市场 | 他人信息页内嵌区（layout 有 id） | 弱：客户端有"功能不可用！"文案 |
 | 19 | 他人信息页**动态明细行**（任意 label:value，schema 见 §3） | baseInfoServlet?step=other 响应 → native 行构造器 | **静态不可读（VMP）** |
+| 20 | **同班同学名录**：姓名/性别/班级/用户学号/入学时间/是否在住 | `StudentListActivity` ← `StudentListBean.classmatesList[]` | 强（Gson，Java 可见） |
+| 21 | **扫码身份页**（`hqsf xqxt\|<uuid>`）：学校/工号/学号/姓名/身份 | `GrxxActivity`（布局 `activity_grxx.xml`） | 强（布局静态 5 行） |
 
 **明确查不到（静态 0 证据）**：身份证号（学生）、高考号、政治面貌、出生地、生源地、毕业中学、邮箱、家长/家庭信息、地址、宿舍、成绩、考勤、借阅——**觅Ta 链路上不存在对应端点**；这些字段仅在「查自己」或教师端页面出现（`activity_person_stu_information.xml` 等）。
 **唯一例外**：教师简历端点（第 13 行）的解析面里**有** `sfzh`/`dh`/`jg`——是否真下发需实测。
@@ -47,10 +49,15 @@
 | `TdkbActivity` / `TaWeekCourseActivity` | 课表（排除项） | `resultSet`/`state`；`xnxq` + 节次字段 |
 | `x3/b`（JsxqDialog） | 教师简历弹窗 | `oriHd_ggym&step=GetTeaResume&jsid=&userid=`（:151-167） |
 | `x3/c`（KcxqDialog） | 课程详情弹窗 | 先查**自己** `baseInfoServlet`（取 xh）→ `oriHd_kc&step=getCourse_Detail_hd&kcid=&xgh=`（:171-186） |
-| `u8/v`（他人列表 adapter） | 点列表某人 | `getMITAWithOther`（:518-535）→ 再进信息页 |
+| `u8/v`（TdkbListItemAdapter）/ `u8/f`（ClassmateGridItemNewAdapter） | BbsBean 列表项渲染 + 点人 | `getMITAWithOther`（`u8/v.java:518-535`）→ 再进信息页 |
 | `t9/t0`（MiTaUtil，原 y8/s0） | 门禁判定 | 门禁通过后调 `e2.a.l/m/n` 拉 `step=other` |
 | `e2/a` 回调 `d`（二维码 `hqsf xqxt\|<uuid>`） | 扫码看某人 | `step=other` → `GrxxActivity`（`t9/z.java:96-101`） |
 | `w8/b`（ClassmateListItemNew2Adapter） | 同学列表点人 | 教师→直接周课表；学生→`getMITA` 门禁（:130-144） |
+| `ClassmatesGridActivity`（同学网格） | 点人**直接跳信息页、不经任何开关闸门**（:96-105） | 无请求 |
+| `StudentListActivity`（同班同学列表） | 班级同学名录 | Gson→`bean/StudentListBean`：`classmatesList[].xm/xb/bjmc/yhxh/entertime/islive`（回调 `b`，:54-79） |
+| `l5/a`（看过我的）/ `l5/b`（收藏我的） | 访客/收藏列表 → 点人 | 查自己 `guanxin&step=course_chakan_me / course_shoucang_me`；点项 → `e2.a.l`（`step=other`，`l5/a.java:53`、`l5/b.java:53`） |
+| `ssj/c`（留言/动态列表，被信息页复用） | 点头像/昵称 | → `t9/t0` 闸门 → `step=other`（`ssj/c.java:329-338,588-598`） |
+| `GrxxActivity`（扫码落地身份页） | 扫 `hqsf xqxt\|<uuid>` 看某人 | `step=other`（`t9/z.java:96-101`）；布局 `activity_grxx.xml` 显示 **学校/工号/学号/姓名/身份** 5 行 |
 
 ---
 
@@ -167,7 +174,7 @@
 
 ⇒ 即使某字段不显示，也能**用搜索命中与否反推**目标属性（姓名/性别/专业/籍贯/入学年级/身份六维），命中过多时服务端返回 `flag="2"`（"满足条件的人数太多"）。
 
-搜索结果 `data[]` → `BbsBean`（native 构造）；列表项只渲染 **姓名 `i()` + 班级 `n()`**（`u8/v.java:451-455`），并携带 `b()`=JID(`xxdm_学号/工号`)、`q()`=性别、`j()`/`l()`=身份类型。
+搜索结果 `data[]` → `BbsBean`（native 构造）；454 里两个 BbsBean 列表 adapter 是 `u8/v`（`TdkbListItemAdapter`）与 `u8/f`（`ClassmateGridItemNewAdapter`），它们只渲染 **姓名 `i()` + 班级 `n()`**（`u8/v.java:451-455`）、头像 `h()`、性别 `q()`，并在点击时携带 `b()`=JID(`xxdm_学号/工号`)、`j()`/`l()`=身份类型。⚠️ **哪个 adapter 真正渲染觅Ta 搜索结果列表由 native 决定**（`MitaNewListActivity` 的 onCreate 是 native），此处只报 adapter 能力，不断言绑定关系。
 
 ---
 
@@ -181,7 +188,9 @@
   - `MitaNew2Activity.k2/l2/o2/p2`（觅Ta 搜索请求构造）
   - `TeaInfoActivity`、`MitaNewActivity.C2/D2/E2`、`ClassmateInfoActivity.E2/M2/O2/S1/T1`
 - ⇒ **静态读不出**：① 他人信息页动态行的完整标签/键集合；② 觅Ta 搜索请求的 `action/step` 名。
-- ⇒ 但**可读**：行 schema（§3）、搜索结果结构与列表字段（§3/§4）、所有非 native 端点的取键（§2）。
+- ⇒ **可读**：行 schema（§3）、搜索结果结构与列表字段（§3/§4）、所有非 native 端点的取键（§2）。
+- ⚠️ **端点归属的证据等级**：`ClassmateInfoActivity`/`TeaInfoActivity` **自身**发出的那条主信息请求（回调 `l`/`m` 取 `mita`/`xm`/`xb`/`uuid`，`:526-635`/`:637-746`，失败分支弹"未开启【觅Ta】服务"）构造在 native，**454 Java 里看不到它的 URL**。「它就是 `baseInfoServlet?step=other`」目前靠两点间接支撑：(a) `t9/t0` 闸门通过后 Java 直调 `e2/a.l/m/n`（= `step=other`）拉起这两个页面；(b) 先前会话的 435/452 静态比对（`改版深度探索文档.md`、`数据面与监控组件深挖.md`）。引用时按"高置信但非 454 直证"对待。
+- ⚠️ 本工作区现有抓包 `analysis/captures/flows_20260910_mitm.bin` 里**没有任何觅Ta 流量**（`getMITA`/`judgeBlackList`/`baseInfoServlet` 0 命中）→ native 部分目前也无法动态补证；要拿准只能 hook `da.b` 的请求构造/回调或重抓。
 
 ---
 
@@ -194,6 +203,8 @@
 2. 他人信息页动态行实际包含哪些标签（是否含 学号/院系/电话 行）。
 3. `GetTeaResume` 是否真下发 `sfzh`/`dh`/`jg`/`nl`/`gw`/`zc`（解析面有、展示面不用 → 若下发即"可读出但不显示"）。
 4. 觅Ta 搜索的实际 `action/step` 与参数名（native，只能抓包看）。
+
+**查他人链路的请求组合数**：Java 可见 **7 组**（① `judgeBlackList`；② `getSettings&step=getMITA`；③ `getSettings&step=getMITAWithOther`；④ `baseInfoServlet&step=other`；⑤ `oriHd_ggym&step=GetTeaResume`；⑥ `oriHd_kc&step=getCourse_Detail_hd`；⑦ `kingo_course&step=course_shoucang_delete`），另有 **2 处（信息页主请求、加黑名单）构造在 native 不可见** → 全链路 ≤ 9 组。
 
 合规边界：回放只填自己的 uuid，不枚举他人；抓到他人数据只记键名不存值。
 
