@@ -737,3 +737,40 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 | 成品 qx-454-mita.apk | `text="Home"` + `text="觅Ta" clickable="true" bounds="[841,66][970,187]"` | `patch/evidence/home_button_flatten_build.png` |
 
 未做的验证：模拟器上**没有可用账号**（登录页要求先选学校；工作区只掌握 CTF 阶段 PC 端账号 1981448/a 与抓包里的 userid，无 App 密码），因此「登录后首页/觅Ta 各页正常」「对方未开觅Ta 时服务端是否下发数据」两条留待真机+真实账号，流程见 `实操手册.md` 第四节。
+
+---
+
+## 2026-10-04 · 普查：觅Ta 到底能查出目标哪些值（除课表外）— 454 静态定稿
+
+记录时间：2026-10-04T00:05:00+08:00（会话内时间线承接上节）。本轮纯静态普查，无 APK 改动。
+
+### 一、产出
+
+`analysis/觅Ta可查字段清单.md` —— 454 官方包**明文 dex** 反编译树（`analysis/latest/plain_jadx/sources/`，10,388 java）的全量普查：入口 → 端点 → 取键 → Bean → 展示面，并标注 VMP 边界。
+
+### 二、结论（除课表外，觅Ta 链路上能查到目标的）**
+
+- **身份/教学属性**：姓名 `xm`、性别 `xb`、头像（uuid 派生 URL）、学号/工号（`xh`/`jsdm`/`userid`，JID=`xxdm_xh`）、学校 `xxdm`、院系 `yx`、专业 `zy`、入学年级 `rxnj`（"XX级"）/入校年份 `rxnf`、班级 `ssbj`。
+- **状态类**：觅Ta 开关 `state`/`mita`（getMITA / getMITAWithOther / setMITA）、黑名单 `flag`（judgeBlackList / deleteBlackList）。
+- **教师公开简历**（`oriHd_ggym&step=GetTeaResume`）：展示 6 项 = 性别/出生年月/学历/学位/入校年份/民族；**解析面 16 字段里另有 `sfzh`(身份证号)、`dh`(电话)、`jg`(籍贯)、`nl`(年龄)、`gw`(岗位)、`zc`(职称)、`yx`、`img` —— 全树 getter 0 调用，即"能解析但不显示"，是否下发需实测**。
+- **课程详情**（点课表内某课，`oriHd_kc&step=getCourse_Detail_hd`）：KcxqCopyBean 13 字段（课程名/英文名/承担单位/简介/学分/总学时/上机学时/其它学时/代码/先修/替代/教材）。
+- **搜索条件面 = 服务端可检索字段**（`activity_mita_new2.xml`，452 与 454 布局完全一致）：姓名 / 身份(学生|教师) / 性别 / 专业 / **籍贯** / 入学年级 ⇒ 即使用户看不到籍贯，也能用"搜得到搜不到"反推（oracle）。
+- **明确不可得**：学生身份证 `sfzh`、高考号 `gkksh`、政治面貌 `zzmm`、出生地 `csd`、生源地 `syd`、邮箱 `lxryj`、家庭/家长信息（`getJtdz`/`getDz`/`getJz` 在 454 **连字段都不存在**）、成绩/考勤/借阅 —— 觅Ta 链路上无对应端点；敏感字段中 454 全树**唯一上屏**的是 `HYDX.UserInfoBean.getLxrdh()`（`JsjysqdActivity.java:750`，且是**查自己**的就业意向）。
+
+### 三、方法论修订（重要，勿再沿用旧口径）
+
+1. **`baseInfoServlet?step=other` 没有响应 Bean**：`e2/a.java`（ImKingoRequest）三回调全部裸 `JSONObject`，只消费 `xm/xxdm/xh/jsdm/userid/ssbj/xb`，`rxnj`/`rxnf` 只作 `has()` 分流（学生页/教师页）。⇒「用 Bean 字段集推查他人下发面」的做法不成立，只能抓包。
+2. **`BbsBean`（觅Ta/他人列表卡片）由 native(KDVmp JNI) 填充**，全树无 `fromJson(BbsBean.class)`；其 `toString` 字面量与实际语义 **5 处冲突**（f35944f 标 title 实为姓名、f35945g 标 content 实为 uuid、f35951m 标 replyUserName 实为性别、f35952n 标 oriContent 实为班级、f35949k 标 attachments 实为 STU/TEA）。引用时必须标注。
+3. **`bean/jsjy/bean/MitaListBean` 不是觅Ta 搜索列表的 Bean**，是就业（JSJY）经办人列表用的（构造 `JbrListActivity:69`，消费 `JsjysqdActivity:940` native）。
+4. 误读防呆：`x3/b.java:136-141` 的 `getXb/getCsrq/getXl/getXw/getRxnf/getMz` 接收者是 `JsxqBean.ResultSetBean`，**不是** `UserInfoBean`。
+
+### 四、VMP 边界（静态到此为止）
+
+454 明文 dex 里 **13,551 native 方法 / 822 文件**；`com/nesun/KDVmp` + `libkdvmp.so`(arm64 8.85MB，字符串全加密，`ssbj/csrq/sfzh/学号…` 0 命中)。受影响的关键方法：`ClassmateInfoActivity.y2()`（他人信息页**动态行构造器**，452/435/454 三版均 native）、`ClassmateInfoActivity.N2()` / `TdkbActivity.e2()` / `ClassmatesGridActivity.Z1()`（JSON→List\<BbsBean\>）、`MitaNew2Activity.k2/l2/o2/p2`（**搜索请求构造**）。
+⇒ 静态**读不出**：① 他人信息页动态行的完整标签集；② 觅Ta 搜索请求的确切 action/step。
+⇒ 静态**可读**：行 schema（`u8/n.java:258-294`：`tag`/`content`/`image` + 可选 `dh=="1"`→拨号、`jsdm`→跳教师课表，**行内容无字段白名单** ⇒ 真实字段边界在服务端）、搜索结果结构 `{result:{flag,msg,data[]}}`、搜索结果列表只渲染 姓名+班级。
+
+### 五、下一步
+
+1. 真机 + 真实账号抓包（`实操手册.md` 第四节）：验 ① `step=other` 对未开觅Ta 对方的下发宽窄行；② 他人信息页动态行实含标签；③ `GetTeaResume` 是否真下发 `sfzh/dh/jg`；④ 觅Ta 搜索的 action/step。
+2. 若要继续静态深挖，唯一路径是逆 `libkdvmp.so`（VMP 解释器）或 hook native——成本高，非必要不做。
