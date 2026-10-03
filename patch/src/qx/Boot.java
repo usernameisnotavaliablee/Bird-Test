@@ -8,35 +8,23 @@ import android.net.Uri;
 import android.util.Log;
 
 /**
- * 开发用钩子：作为 ContentProvider 由系统在进程启动时自动构造（早于 Application.onCreate），
- * 起一条后台线程延迟脱壳，把 454 壳运行时解出的明文 dex 落到外部私有目录，供 adb pull 取回。
- * 正式版（只是加觅Ta入口按钮）不装这个 provider。
+ * 注入层入口：ContentProvider 由系统在进程启动时自动构造（早于 Application.onCreate，
+ * 也早于壳把内嵌 dex 交给业务 Application 的那一刻），在这里挂签名绕过。
+ * 变体：dump 版换成 qx.BootDump（多一段脱壳），见 build.sh。
  */
 public class Boot extends ContentProvider {
 
-    private static final int DELAY_MS = 25000;
-
     @Override
     public boolean onCreate() {
-        final Context ctx = getContext();
+        Context ctx = getContext();
         Log.i("qx", "Boot.onCreate pid=" + android.os.Process.myPid());
-        Thread t = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(DELAY_MS);
-                } catch (InterruptedException ignored) {
-                }
-                try {
-                    Dumper.dump(ctx);
-                } catch (Throwable t) {
-                    Log.e("qx", "dump failed", t);
-                }
-            }
-        }, "qx-dump");
-        t.setDaemon(true);
-        t.start();
+        Killer.install(ctx);
+        afterInstall(ctx);
         return true;
+    }
+
+    /** 子类钩子（dump 版在此起脱壳线程）。 */
+    protected void afterInstall(Context ctx) {
     }
 
     @Override

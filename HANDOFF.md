@@ -626,3 +626,53 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 ### 合规边界（不变）
 
 回放/构造请求只用本人 uuid；抓到他人数据只记键名不存值；结论向校方/青果负责任披露，不公开密钥与 exploit 细节。
+
+---
+
+## 2026-10-03 · 【突破】454 明文 dex 到手 + 首页「觅Ta」按钮实机跑通（模拟器验证）
+
+记录时间：2026-10-03T22:45:00+08:00。承上一节，本节是**实机（Apple Silicon 上的 arm64 安卓 15/API33 官方模拟器）验证结果 + 两个决定性发现**。
+
+### 一、结论先说
+
+1. **454 壳的"加密"= 单字节按位取反（^0xFF），对 payload dex 的 57% 字节生效**；拿到运行时内存副本后逐字节比对即可求掩码，5 个 dex 全部还原为明文（`analysis/latest/unpacked/plain/`）。三个大 dex 的 class 描述符 100% 合法（classes2 = 10,512 类，其中 8,042 个 `com/kingosoft`，含 `BaseApplication`/`Home_F`/246 个 `new_kebiao` 类），jadx 反编译出 **10,387 个 java**（此前 0）。
+2. **首页右上角「觅Ta」按钮已在真机环境跑通**：截图 + uiautomator 双重证据，按钮位于标题栏右侧（`text="觅Ta"`，clickable，bounds [841,66][970,187]，紧挨原「更多」按钮 [981,66][1044,187]），点击后 topResumedActivity = `com.kingosoft.activity_kb_common/.ui.activity.new_wdjx.new_kebiao.MitaNew2Activity`（觅Ta 搜索页）。
+3. **签名自检已绕开且只需 Java 层**：仅 `PackageInfo.CREATOR` 代理 + 清 Parcel/PackageManager 缓存（复用改版 `bin/mt/signature/KillerApplication` + `org/lsposed/hiddenapibypass` smali），**不需要** libSignatureKiller.so、不需要 assets/SignatureKiller/origin.apk（80MB）。
+
+### 二、实验链条（可复现）
+
+| 实验 | 结果 |
+|---|---|
+| 原版 454 装模拟器跑 | 正常（LoginActivity 拉起，进程存活）→ 模拟器可用、壳不反模拟器 |
+| **仅换签名**（内容逐字节不变，用自签 key 重签） | **121 次进程自杀**（`exited cleanly (0)`，紧跟 `kdvmp: ro.build.version.sdk = 33`）→ 判定为**签名自检**，不是内容篡改检测 |
+| 注入层只挂 Java 端 KillerApplication 静态初始化 | **0 次自杀**，LoginActivity 正常 → Java 层伪造足够 |
+| provider 里 inflate `home_page_grid` | `hasMitaEntry=true`、`blue(more) present=true` |
+| 壳加载器拓扑 | `payload loader == host PathClassLoader`（`InMemoryDexFile[cookie=[0,…5 个 dex…]]` 直接注进宿主 DexPathList）→ 布局里放自家类能被 inflater 解析，方案成立 |
+| 脱壳产物 | `/data/user/0/<pkg>/.zprotect/<seed>/dex/classes*.dex` **仍是密文**（壳落盘的是密文）；内存副本才是明文 → `scanMemory` 命中 3 大 + 2 小 dex |
+| 反编译 | `jadx -d jadx_plain --show-bad-code --no-res plain/classes2.dex plain/classes3.dex plain/classes.dex` → 10,387 java |
+
+### 三、产物与路径
+
+- 脱壳原始件（gitignore）：`analysis/latest/unpacked/{maps.txt,dex/,zprotect/}`
+- 明文 dex：`analysis/latest/unpacked/plain/classes{,2,3,4,5}.dex`
+- 454 业务源码：`analysis/latest/unpacked/jadx_plain/sources/`（**后续掏门禁/找入口就靠它**）
+- 还原脚本：`patch/decrypt_zprotect.py <on-disk.dex> <memory.dex> <out.dex>`
+- 注入层：`patch/src/qx/{Boot,BootDump,Killer,MitaEntry,Smoke,Dumper}.java`；`patch/build.sh` 现支持 `MODE=button|dump`、`QX_NATIVE=1`
+- 可安装包（gitignore）：`patch/out/qx-454-button.apk`（按钮+签名绕过）、`patch/out/qx-454-dump.apk`（+脱壳）
+
+### 四、模拟器环境（一次性，被 /tmp 清理后按此重建）
+
+- emulator 37.3.2 + `system-images;android-33;google_apis;arm64-v8a`（`arm64-v8a-33_r17.zip`）+ platform-tools，全部直下 dl.google.com 后解到 `/tmp/qx_build/sdk2`（sdkmanager 拉不到 manifest：改直下 `build-tools_r33.0.2-macosx.zip` / `platform-33-ext3_r03.zip` / `emulator-darwin_aarch64-16433917.zip`）。
+- AVD 手写：`/tmp/qx_build/home/.android/avd/qx.{ini,avd/config.ini}`（`image.sysdir.1=system-images/android-33/google_apis/arm64-v8a/`，`hw.gpu.mode=swiftshader_indirect`）；`avdmanager create avd` 会因缺 package.xml 报 "emulator package must be installed"，不用它。
+- 启动：`ANDROID_AVD_HOME=… HOME=/tmp/qx_build/home …/emulator -avd qx -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect`（HVF 加速可用，冷启 ~30s）。
+- 实机操作：`bash patch/device.sh install-button|install-dump|pull|log`。
+
+### 五、下一步：阶段二（掏门禁 + 扁平化，纯静态可做）
+
+1. 用 `jadx_plain` 树定位 454 的 6 处闸门（对应改版：TeaInfoActivity / ClassmateInfoActivity / TdkbActivity / MitaNewActivity / MitaNewListActivity + `a2/a`），确认 `state`/`mita` 判断点。
+2. de-shell 扁平化（照改版配方）：外层 dex ← 明文业务 dex；manifest `application` ← `com.kingosoft.activity_kb_common.BaseApplication`；删 `assets/origin.apk` 与 `libzprotect.so`；保留 provider（签名绕过）；首页按钮沿用布局 patch。
+3. 模拟器回归：启动、首页按钮、进觅Ta 页；服务端行为（对方未开觅Ta 时能否拉到数据）最终仍需在真机 + 真实账号上验证。
+
+### 合规边界（不变）
+
+回放/构造请求只用本人 uuid；抓到他人数据只记键名不存值；结论向校方/青果负责任披露，不公开密钥与 exploit 细节。
