@@ -13,3 +13,6 @@
 /analysis/captures/
 
 # Keep source APKs, reports, comparison results, and analysis tools tracked.
+
+# Built/patch outputs: large APKs (rebuild with patch/build.sh)
+/patch/out/

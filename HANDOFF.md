@@ -580,3 +580,49 @@ jadx -d <out> --show-bad-code --no-res origin_repaired_nomap/classes3.dex
 - 前置补齐后，仅发该测试账号正常权限内的本人课表最小请求；计划按每分钟最多 10 次、串行、计入重试/重定向，低于用户规定 100 requests/min。未明确正常请求构造前不盲发密码、不枚举目标、不回放过期凭据。
 - 花名册另判：公开课表不等于真实他人名单已授权；拒绝结果保留，不通过更换他人标识绕过。服务端鉴权漏洞对照应在明确授权的受控对象/合成测试环境进行。
 - **本轮远程请求数 0；没有使用本轮账号登录，没有删除任何工作区数据。**只追加 HANDOFF.md；此前未提交修改及未跟踪文件保留。Git 审批失败仍待处理，未重试、未暂存、未提交。
+
+---
+
+## 2026-10-03 · 454 觅Ta 入口按钮落地：改版配方定案 + 壳内注入构建管线跑通（待实机验证）
+
+记录时间：2026-10-03T22:20:00+08:00。本轮为「按改版方式在最新版实现觅Ta入口（首页右上角按钮）」的第一阶段：先把**配方与构建管线**做实，产出两个可安装产物，实机验证与「掏门禁」留待拿到明文 dex 后。
+
+### 一、改版配方定案（推翻旧记录里两处含糊说法）
+
+硬证据（本轮直接读盘）：
+
+1. **2.6.435 根本没加固**：改版内嵌 `assets/SignatureKiller/origin.apk`（64,853,894 B / 5540 项 / META-INF/KINGOKEB.RSA）= **官方 435 完整包**，其 `classes.dex`(8,368,760)/`classes2.dex`(7,868,788)/`classes3.dex`(1,730,948)/`classes4.dex`(35,628) **全是明文**；包内只有 `libJNIEncrypt.so`，**无 libzprotect.so**。
+2. 改版外层 = **明文业务 dex 直接摊到外层**：改版 `classes.dex` 8,143,784 / `classes2.dex` 7,883,376 / `classes3.dex` 2,072,348（classes3 变大 = 混入 KillerApplication/HiddenApiBypass/Log22A16D 注入类）；`AndroidManifest.xml` 的 `application android:name="com.kingosoft.activity_kb_common.BaseApplication"`（不是壳桩 ZAP）；改版**无 libzprotect.so、无 assets/origin.apk**。
+   → 结论：**改版 = 官方 435 明文底包 → 掏 6 处门禁 → 注入签名绕过 → 去壳扁平化重打包**。此前 CLAUDE.md 里「移除内嵌 assets/origin.apk / 原壳 classes4.dex」是「452 vs 435 宏观 diff」的误挂，不是改版对它自己底包做的事。
+3. **454 静态不可 patch 复核（自测）**：`assets/origin.apk` 内 5 dex（classes 8,885,608 / 2 7,854,804 / 3 4,481,620 / 4+5 各 15KB），可打印字节占比仅 **0.05–0.07**，字符串池大面积密文 → 维持「必须动态拿明文」判断。
+4. **454 壳机制（新增硬证据，决定注入形态）**：`libzprotect.so` 字符串含 `art::DexFile::OpenMemory`、`InMemoryDex`、`makeInMemoryDexElements`、签名 `(Ljava/util/List;Ljava/util/List;Ljava/lang/ClassLoader;)[Ldalvik/system/DexPathList$Element;`、`Landroid/app/LoadedApk;`、`getClassLoader` → 壳是**把解密后的 dex 直接注入宿主 ClassLoader**（同一 ClassLoader，非子加载器）。
+   → 两条推论（本轮构建据此设计）：① 首页布局 XML 里可以直接放我们自己 dex 里的控件类（`qx.MitaEntry`），LayoutInflater 能解析；② 注入层代码可以直接 `Class.forName` 业务类（如 `MitaNew2Activity`）。
+5. **觅Ta 入口现状（435/454 同构）**：首页布局 `res/layout/home_page_grid.xml` 标题栏（68dp）右侧只有一个 `@id/blue`（ic_dhl_more 更多按钮）；更多弹菜单里 `popmenu_mt_ll`（文案 `menu_mt`=觅Ta）→ `Home_F$k.onMenuItemSelected` → `((Main)a).a0("mt")`；**`Main.a0(String)` 是 native（VMP），全树 0 处 Java 引用 `MitaNew2Activity`** → 觅Ta 页面由 native 分发拉起。454 全量 manifest 仍声明全部 21 个 `new_kebiao` 活动（含 MitaNew2Activity/MitaNewActivity/MitaNewListActivity/TdkbActivity/TeaInfoActivity）。
+6. 官方签名证书 DN 复核：`CN=qingguo, OU=qingguoyouxiangongsi, O=qingguoyouxiangongsi, L=cs_frq, ST=hn_cs, C=086`（SHA1 11:16:B7:10:...），与改版 `KillerApplication` 里硬编码的那张 base64 证书**同一张** → 阶段二要复用的签名绕过机器对 454 同样有效（无需换证书）。
+
+### 二、已产出：patch/ 注入构建管线（本次新增，入库）
+
+- `patch/src/qx/MitaEntry.java`：首页右上角按钮控件（TextView「觅Ta」，点击 `Class.forName(MitaNew2Activity)` → `startActivity`，失败回退组件名）。
+- `patch/src/qx/Boot.java` + `patch/src/qx/Dumper.java`：开发用脱壳 provider（进程启动 25s 后：① 递归搬 `/data/data/<pkg>/.zprotect/**`；② 扫 `/proc/self/mem` 的 `dex\n03x` 魔数按 dex 头校验后落盘；③ 存 maps.txt）→ 产物落 `/sdcard/Android/data/com.kingosoft.activity_kb_common/files/qxdump/`，`adb pull` 直取，**不需要 root / frida**。
+- `patch/patch_layout.py`：往 `home_page_grid.xml` 标题栏 `@id/blue` 左边插 `qx.MitaEntry`（幂等）。
+- `patch/patch_manifest.py`：往壳 manifest 加 `qx.Boot` provider（幂等，仅 dump 版）。
+- `patch/build.sh`：apktool d/b → javac → d8 → 塞 classes3.dex → zipalign → apksigner(v1+v2+v3)。
+- 产物（gitignore，不入库）：
+  - `patch/out/qx-454-button.apk`（74,885,336 B）= 454 + 首页右上角觅Ta按钮（正式形态）
+  - `patch/out/qx-454-dump.apk`（74,889,432 B）= 上一个 + 脱壳 provider（开发形态）
+- 构建要点/坑：
+  - apktool 3.0.3 可完整解壳 APK（3s），**资源 ID 全量零漂移**（重编前后各 17,454 项、逐项 ID 相同）→ 回编安全（payload dex 里的 R 常量不会错位）。
+  - 壳自家 `classes.dex`/`classes2.dex` **回填原始字节**（不吃 apktool 的 smali 往返），只新增 `classes3.dex`；校验 md5 一致已打印为 True。
+  - build-tools 33 自带 d8 在 JDK 21 上 NPE → 改用 Google Maven `r8 9.4.28` 的 `com.android.tools.r8.D8`；SDK 装在 `/tmp/qx_build/sdk2`（sdkmanager 拉不到 manifest，改为直下 `build-tools_r33.0.2-macosx.zip` + `platform-33-ext3_r03.zip`）。
+  - 签名为自签 `patch/qx.keystore`（pass qx123456，入库以便后续增量安装不必卸载）；targetSdk 33 → **必须 v2 签名**，v1-only 装不上。
+  - 未含改版式签名绕过（KillerApplication/libSignatureKiller/origin.apk）：先测最小改动，若实机出现签名自检拒绝再补（证书已证同一张，补起来是纯搬运）。
+
+### 三、下一步（等实机）
+
+1. 手机 USB 连上（`adb devices` 当前为空）→ 卸载官方 454（签名不同，必卸）→ 装 `qx-454-button.apk`：看首页右上角是否出现「觅Ta」、点击能否进觅Ta 页（若 MitaNew2Activity 需要 intent extras，按实机表现改注入层；拿到明文 dex 后可改成调用 native 分发 `a0("mt")` 的正确混淆名）。
+2. 装 `qx-454-dump.apk` 跑一轮 → `adb pull /sdcard/Android/data/com.kingosoft.activity_kb_common/files/qxdump/` 取明文 dex。
+3. 阶段二（拿到明文后，纯静态可做）：de-shell 扁平化（外层 = 明文业务 dex、manifest application 改 BaseApplication、删 assets/origin.apk 与 libzprotect）+ 掏门禁（与改版同 6 处：TeaInfo/ClassmateInfo/Tdkb/MitaNew/MitaNewList + a2/a）+ 首页按钮 + 重签 → 交付 `最新版-觅Ta.apk`。
+
+### 合规边界（不变）
+
+回放/构造请求只用本人 uuid；抓到他人数据只记键名不存值；结论向校方/青果负责任披露，不公开密钥与 exploit 细节。
