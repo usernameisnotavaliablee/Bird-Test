@@ -196,7 +196,7 @@
 
 ## 6. 与 435/452 的一致性 & 待实测项
 
-一致性：`classmate_info.xml` / `activity_mita_new2.xml` 字段在两版相同；`JsxqBean` 16 字段相同；`step=other` 取键相同（452 `a2/a.java` ↔ 454 `e2/a.java`）。改版（435）的差异只在**门禁被掏空**，不改字段面。
+一致性（已用 452 官方 payload 明文树 `analysis/original/payload_plain_jadx/sources/` 复核）：`classmate_info.xml` / `activity_mita_new2.xml` 字段在两版相同；`JsxqBean` 16 字段相同（452 `bean/HYDX/bean/JsxqBean.java` 同为 `private String × 16`）；`step=other` 三处调用点同址（452 `e2/a.java:589/605/621` ↔ 454 `e2/a.java:590/606/622`）；信息页取键同为 `mita/xm/xb/uuid/flag`。改版（435）的差异只在**门禁被掏空**，不改字段面。
 
 需动态（真机 + 抓包，手册 §4）才能定性的 4 条：
 1. `step=other` 对**未开觅Ta**的对方实际下发宽行还是窄行（= 漏洞定性的核心）。

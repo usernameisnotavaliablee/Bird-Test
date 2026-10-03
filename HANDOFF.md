@@ -826,3 +826,7 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 
 1. 让用户确认两侧看的是不是同一个 tab；要定论就按 `实操手册.md` §4 抓一次：同一账号、同一台机、两个 APP 各开一次「学业成绩」，对比 `getStucj&step=detail` 的 `flag=0/1` 两次响应里的 `kscj`/`kscjm`（明文 JSON，`python3 analysis/tools/decrypt_xqr.py -` 不需要，直接看即可）。
 2. 452 已可静态读码 → 之前「452/454 业务面不可读」的遗留问题（如 454 觅Ta 新闸门形态、454 vs 452 逐类差异）现在都能做；454 侧同样可用 `unmask_zprotect.py`（`analysis/latest/unpacked/zprotect/*` → 明文）。
+
+### 七、452 官方明文树复核（2026-10-04 追加）
+
+用新产出的 `analysis/original/payload_plain_jadx/sources/`（452 官方 payload 明文，非 435 内嵌副本）复核字段面**完全一致**：`step=other` 三处调用点同址（452 `e2/a.java:589/605/621` ↔ 454 `:590/606/622`）；信息页取键同为 `mita/xm/xb/uuid/flag`；`JsxqBean` 同为 16 字段。另确认 452 的 `ClassmateInfoActivity`（54 个 native 方法）与 `MitaNew2Activity`（26 个）**同样是 VMP 保护** → 「他人信息页行构造器 / 觅Ta 搜索请求」在 452 也静态不可读，本清单 §5 的 VMP 边界对 452/454 同时成立。
