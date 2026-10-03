@@ -19,6 +19,7 @@ public class Boot extends ContentProvider {
         Context ctx = getContext();
         Log.i("qx", "Boot.onCreate pid=" + android.os.Process.myPid());
         Killer.install(ctx);
+        ProbeHook.install(ctx);
         afterInstall(ctx);
         return true;
     }
