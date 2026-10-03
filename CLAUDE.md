@@ -18,9 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 已确认的总体结论（分析起点）
 
-- **原版是加固包**：`AndroidManifest.xml` 的 application 入口为 `com.nesun.stub.ZAP`（典型加固壳桩），真实业务代码被抽取到 `analysis/original/payload_dex/` 的 5 个 dex 中，非壳代码需从 payload 反编译产物阅读。
+- **原版是加固包**：`AndroidManifest.xml` 的 application 入口为 `com.nesun.stub.ZAP`（典型加固壳桩），真实业务代码被抽取到 `analysis/original/payload_dex/` 的 5 个 dex 中。**2026-10-03 起该 payload 已离线解密**（`analysis/tools/unmask_zprotect.py`，规则见 HANDOFF）：明文与 jadx 产物在 `analysis/original/payload_plain{,_jadx}/` —— 谈 452 行为一律以这棵树为准（452 的混淆命名与 454 相同：`t9/w6/da/x8/q7`，可直接与 454 对位）。
 - **改版是对原版的二次重打包**：注入 `libSignatureKiller.so`（arm64-v8a / armeabi-v7a / armeabi）与 `assets/SignatureKiller/origin.apk` 绕过签名校验，替换签名证书（`KINGOKEB` → `ANDROID`），移除内嵌的 `assets/origin.apk` 和原壳的 `classes4.dex`，新增百度地图 SDK（`libBaiduMapSDK_*.so`）。
-- **最新版（2.6.454）是官方加固包**：壳桩 `com.nesun.stub.ZAP`，业务代码在内嵌 `assets/origin.apk` 的 5 个 dex，签名仍为 `KINGOKEB.RSA`（与原版同证书），未被篡改。**壳对 at-rest dex 加密**（字符串池 ~60%、class_data ~100% 密文/垃圾）——jadx 反编译全部空壳桩，**454 业务代码静态不可读**，要代码须动态 dump（Frida，需 root）或逆壳解密器。⚠️ **觅Ta 旧「已删除」结论已被推翻（2026-09-13 修订，勿再沿用）**：此前记「旧 4 类确认删除、`y8/s0` 与 `z7/v` 也删除」——**证据不足，不成立**。① 454 全量 manifest（`analysis/latest/jadx/resources/AndroidManifest.xml`）仍声明**全部 21 个** `new_kebiao` 活动，含 MitaNew2/MitaNew/MitaNewList/TeaInfo/Tdkb/TdkbMain/ClassmateInfo/TaWeekCourse，**无一 `enabled="false"`**；② 452（确认可运行的官方包）对这些类名在字符串表**同样 0 命中** → 「0 命中」= 名字落进加密区，**≠ 类被删除**；③ 435 的 `y8/s0`（9 类，source_file 全为 `MiTaUtil.java`）与 452/454 的 `Lt9/t0` 簇**逐类 (fields, methods) 完全一致**（f=0/2、3/2、4/2…），454 侧 source_file 亦标 `MiTaUtil.java` → 是**改名**非删除。`a2/a` 仍在（452/454 classes.dex idx 12866/12959）。**故 454 觅Ta 相关类很可能仍在，只是混淆改名后落进加密区；新闸门形态仍未知**。`Mita_edit` = 旧版就有的通用搜索框控件（此条未被推翻）。字符串级侦察用 `analysis/latest/string_tables/` 的恢复字符串表。
+- **最新版（2.6.454）是官方加固包**：壳桩 `com.nesun.stub.ZAP`，业务代码在内嵌 `assets/origin.apk` 的 5 个 dex，签名仍为 `KINGOKEB.RSA`（与原版同证书），未被篡改。**壳对 at-rest dex 加密**——直接 jadx 全是空壳桩；**2026-10-03 起可离线解密**（`analysis/tools/unmask_zprotect.py`，明文产物 `analysis/latest/unpacked/plain/`，与 2026-10-03 动态 dump 结果逐字节一致），无需 root/Frida。⚠️ **觅Ta 旧「已删除」结论已被推翻（2026-09-13 修订，勿再沿用）**：此前记「旧 4 类确认删除、`y8/s0` 与 `z7/v` 也删除」——**证据不足，不成立**。① 454 全量 manifest（`analysis/latest/jadx/resources/AndroidManifest.xml`）仍声明**全部 21 个** `new_kebiao` 活动，含 MitaNew2/MitaNew/MitaNewList/TeaInfo/Tdkb/TdkbMain/ClassmateInfo/TaWeekCourse，**无一 `enabled="false"`**；② 452（确认可运行的官方包）对这些类名在字符串表**同样 0 命中** → 「0 命中」= 名字落进加密区，**≠ 类被删除**；③ 435 的 `y8/s0`（9 类，source_file 全为 `MiTaUtil.java`）与 452/454 的 `Lt9/t0` 簇**逐类 (fields, methods) 完全一致**（f=0/2、3/2、4/2…），454 侧 source_file 亦标 `MiTaUtil.java` → 是**改名**非删除。`a2/a` 仍在（452/454 classes.dex idx 12866/12959）。**故 454 觅Ta 相关类很可能仍在，只是混淆改名后落进加密区；新闸门形态仍未知**。`Mita_edit` = 旧版就有的通用搜索框控件（此条未被推翻）。字符串级侦察用 `analysis/latest/string_tables/` 的恢复字符串表。
 
 ## 目录语义（命名即含义）
 
@@ -29,13 +29,15 @@ analysis/
   original/   原版.apk 的解包产物
     apktool/         apktool 反编译结果（AndroidManifest.xml + smali*）
     jadx/            jadx 反编译出的 Java 源码 + resources
-    payload_dex/     从加固壳中脱壳提取的 dex（classes.dex ~ classes5.dex）
-                      ⚠️ 数据区部分加密（壳解密完成前被 dump）：jadx 反编译 3496 java
-                      全为空壳桩（JADX ERROR），静态不可恢复；重新动态脱壳或
-                      提取壳密钥离线解密才有解。452 业务 Java 面改用
-                      modified/jadx 或 embedded_origin_jadx* 树
-    payload_dex_repaired/         修复校验和的 dex
-    payload_dex_repaired_nomap/   修复 + 损坏 map-list 置零 的 dex
+    payload_dex/     ★ at-rest 加密态 payload dex（classes.dex ~ classes5.dex）
+                      ⚠️ 旧结论「静态不可恢复」已于 2026-10-03 作废：壳只对 dex 尾部
+                      一段做按位取反并跳过 0x00/0xFF，用 analysis/tools/unmask_zprotect.py
+                      可离线还原（452 五个 dex 全部 SHA-1/Adler-32 校验通过）
+    payload_plain/            ✅ 解密后的明文 dex（2026-10-03，5 个，已校验）
+    payload_plain_jadx/       ✅ 明文 dex 的 jadx 产物（10,164 java）——**452 业务 Java 面
+                              现在读这里**，不要再从 modified/(=435) 推断 452 行为
+    payload_dex_repaired/         修复校验和的 dex（旧路线，已被 unmask 取代）
+    payload_dex_repaired_nomap/   修复 + 损坏 map-list 置零 的 dex（旧路线）
     payload_jadx*/                对应 payload dex 的 jadx 反编译产物（全部空壳桩，勿再跑）
   modified/  改版.apk 的解包产物（apktool/、jadx/、jadx_rawnames/）
     embedded_origin_*/  从改版内嵌文件（assets/SignatureKiller/origin.apk）中解出的
@@ -75,6 +77,7 @@ analysis/
 - `manifest_diff.py <left> <right> [--output f.json]` — 解析两个反编译后的 `AndroidManifest.xml`（**XML 明文**，非二进制 AXML），对比权限、组件、导出组件、launcher、meta-data、SDK 版本等安全相关结构。
 - `repair_dex_header.py <src> <dst> [--zero-map-list]` — 重算 dex 头的 SHA-1（偏移 32 起）与 Adler-32（偏移 12 起），修复加固壳破坏的校验和。`--zero-map-list` 额外把损坏的 map-list 项数置零（对应 `payload_dex_repaired_nomap` 变体）。
 - `decrypt_xqr.py <密文文件|->` — baseInfoServlet/登录响应一键解密 + 宽窄行判定（URLDecode→Base64→AES/CBC/PKCS5，key/IV 硬编码在脚本内）。`pbpaste | python3 tools/decrypt_xqr.py -`。唯一依赖 `cryptography`（其余脚本纯标准库）。
+- `unmask_zprotect.py <enc.dex> <out.dex> [...]` — 娜迦壳 at-rest payload dex 解密（尾部按位取反、跳过 0x00/0xFF；自动定位 T 并做头部 SHA-1/Adler-32 校验）。`--selftest` 用 454 产物自检。2026-10-03 新增，452/454 通用。
 
 ## 改版 vs 内嵌原包的真实差异（已逐类确认）
 
@@ -115,7 +118,16 @@ analysis/
 ### 5. 第三方 SDK 零改动
 推送 appkey（JPUSH `fa5d848b146f9ac37e72b100` / XIAOMI / OPPO）、百度地图/语音 key、华为 HMS、assets/res 配置全部与底包 byte-identical。18 个 SDK 差异文件经 DEX 方法集比对全部是反编译噪声，改版者没有篡改任何 SDK 配置或数据回传。
 
-### 6. 签名绕过完整机制
+### 6. 成绩查询（学业成绩）零改动 +「等级分 / 原始分值」溯源（2026-10-03）
+用户报告「原版『学业成绩』只能看等级分 A/B/C，改版能看原始分值」——**经 452 payload 解密后逐页核对，成绩模块改版零改动、435 与 452 功能等价**：
+- 改版 vs 底包(435)：`ui/activity/score` 全等；整个 `com/kingosoft` 业务面 2504 文件中仅 8 个差异（BaseApplication、5 个觅Ta门禁类、FdybsdtShActivity、.DS_Store），**成绩模块无一改动**。
+- 435 vs 452：`score/*`、`cjfb/*`、`xscj/*`、`XSCJFB/*`、`bean/*Score*` 全是重命名噪声；请求逐字相同 —— `POST {serviceUrl}/wap/wapController.jsp`，`action=getStucj & step=detail & xnxq & flag & userId & usertype`（435 `d6/b.java:86` ≡ 452 `w6/b.java:87`）。
+- **真正来源 = 该页本来就有的两个 tab / `flag` 两种取值**：tab「有效成绩」→ `flag=1`（学校发布的最终有效成绩，等级制学校即 A/B/C）；tab「原始成绩」→ `flag=0`（平时/中考/末考/技能 等原始分值）。外部佐证：`lizhengqiang/kingosoft_api` 注释「flag 可取[0,1]，分别代表[原始成绩,有效成绩]」；App 自身佐证：`res/layout/activity_xscj_xq.xml` 把「原始成绩」「有效成绩」两块并排。
+- 客户端只显示 `kscj`，`kscjm` 仅用于「<60 标红」；全库无等级/分数显示开关，`dj`（等级）只存在于**成绩分布** `bean/cjfb/bean/CjBean`。服务端 `cache.jklist` 无 `getStucj` → 无成绩缓存 TTL。
+- 真实版本差异（与等级无关）：452 起「有效成绩」汇总信息改为服务端 `extend[]` 下发（435 客户端自己求和，含 `zxf/hdxf/qdjd/hdxfjd/hdpjxfjd`）；454 才新增 `kcsx`（课程属性）。
+- 结论：若两版所见不同，只可能是「看的是不同 tab」/「服务端按 `appver`(=2.6.435|2.6.452) 下发不同内容」/「账号·学校不同或学校刚切等级制」，**与改版注入无关**。
+
+### 7. 签名绕过完整机制
 改版用 **ApkSignatureKillerEx**（GitHub `L-JINBIN/ApkSignatureKillerEx`）：三层注入。
 - Java 层：反射替换 `PackageInfo.CREATOR` 代理，让 app 进程内查询到的目标包签名伪造为原版 KINGOKEB 证书（含 v2 `SigningInfo` 路径）
 - Native 层：`libSignatureKiller.so`（xhook 1.2.0 静态链接）hook `openat/openat64/open64/open` 的 PLT/GOT，把 `open("/data/app/.../base.apk")` 重定向到解压出的 `assets/SignatureKiller/origin.apk`
@@ -148,6 +160,6 @@ analysis/
 
 - 工具链均在 PATH：`apktool`、`jadx`、`java`、`python3`（Homebrew）。`adb`/`mitmproxy` 需自行安装：`brew install --cask android-platform-tools mitmproxy`（先用 `command -v` 验证）；沙箱内 adb 起不了 daemon（tcp:5037 被拦），本机执行需提权。
 - 反编译一份 APK：`apktool d 某.apk -o <dir>`、`jadx -d <dir> 某.apk`。
-- ⚠️ **不要再用 jadx 跑 origin_repaired_nomap / payload_dex_repaired_nomap**：454 与 452 payload dex 均被壳加密（at-rest 字符串池 ~60%/class_data ~100%），反编译产出全是空壳桩（2026-09-11 双路定案）。454 字符串级侦察改用 `grep` `analysis/latest/string_tables/dex_strings_*.txt`。
+- ⚠️ **payload dex 别直接 jadx**：454/452 的 at-rest payload dex 是「尾部按位取反（跳过 0x00/0xFF）」的加密态，直接反编译全是空壳桩。**先解密**：`python3 analysis/tools/unmask_zprotect.py <enc.dex> <out.dex>`（452 产物已在 `analysis/original/payload_plain/`；454 在 `analysis/latest/unpacked/plain/`，勿用 `origin_repaired*`）。旧的 `repair_dex_header.py` 路线已被取代。
 - 解密抓包响应：`pbpaste | python3 analysis/tools/decrypt_xqr.py -`；或手册 §3.4 的 openssl 一行流（免装 pycryptodome，brew python 有 PEP 668 限制）。
 - 典型分析管线：`apktool d` → `manifest_diff.py` 对比 manifest；`archive_diff.py` 对比条目；对损坏 dex 先 `repair_dex_header.py` 再 `jadx`。
