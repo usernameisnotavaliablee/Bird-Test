@@ -5,9 +5,24 @@
 ## 构建
 
 ```bash
-QX_SDK=/tmp/qx_build/sdk2 bash patch/build.sh button   # -> patch/out/qx-454-button.apk
-QX_SDK=/tmp/qx_build/sdk2 bash patch/build.sh dump     # -> patch/out/qx-454-dump.apk
+QX_SDK=/tmp/qx_build/sdk2 bash patch/build.sh button      # -> patch/out/qx-454-button.apk
+QX_SDK=/tmp/qx_build/sdk2 bash patch/build.sh dump        # -> patch/out/qx-454-dump.apk
+QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh        # -> patch/out/qx-454-mita.apk（去壳扁平化+掏门禁+首页按钮）
+QX_SDK=/tmp/qx_build/sdk2 bash patch/build_probe.sh       # -> patch/out/qx-454-probe.apk（上面全部 + 「榨干Ta」探测）
 ```
+
+## 「榨干Ta」探测（build_probe.sh）
+
+- `src/qx/ProbeHook.java` — `ActivityLifecycleCallbacks`，在 TdkbActivity / TaWeekCourseActivity /
+  ClassmateInfoActivity / TeaInfoActivity / GrxxActivity 的 `android.R.id.content` 上浮一个紫色「榨干Ta」按钮
+  （这些页面=已查到人、收藏课表所在页；不改官方 smali/布局）。
+- `src/qx/ProbeActivity.java` — 弹窗：用 **App 自己的 `Lda/b;`（WebApiRequest）** 发 4 条请求
+  ① `baseInfoServlet?step=other` ② `getMITAWithOther` ③ `judgeBlackList` ④ `GetTeaResume`，
+  把**原始响应 + 解析键值 + 敏感键命中**全摊开，可「复制全部」。
+  走 App 自身的请求栈 ⇒ 参数加密/响应 AES 解密与官方页面完全一致。
+- `stubs/` — javac 读不了 dex，用同描述符的桩类编译 `qx/*`（桩不进 dex，运行时链接真实类）。
+  ⚠️ 桩里的字段/方法名必须与 **smali** 一致：`t9.j0` 的静态实例在 dex 里叫 `a`（jadx 显示为 `f47325a`）。
+- 自测：`adb root && bash patch/device.sh probe`（模拟器无账号时 4 条请求会以网络错误收尾，属正常）。
 
 依赖：
 

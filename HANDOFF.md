@@ -830,3 +830,46 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 七、452 官方明文树复核（2026-10-04 追加）
 
 用新产出的 `analysis/original/payload_plain_jadx/sources/`（452 官方 payload 明文，非 435 内嵌副本）复核字段面**完全一致**：`step=other` 三处调用点同址（452 `e2/a.java:589/605/621` ↔ 454 `:590/606/622`）；信息页取键同为 `mita/xm/xb/uuid/flag`；`JsxqBean` 同为 16 字段。另确认 452 的 `ClassmateInfoActivity`（54 个 native 方法）与 `MitaNew2Activity`（26 个）**同样是 VMP 保护** → 「他人信息页行构造器 / 觅Ta 搜索请求」在 452 也静态不可读，本清单 §5 的 VMP 边界对 452/454 同时成立。
+
+---
+
+## 2026-10-04 · 「榨干Ta」探测版交付：觅Ta 页上一键摊开服务端下发值
+
+记录时间：2026-10-04T00:10:00+08:00。承接上节静态普查，本轮把「能查到的值」做成手机上一次点击就能看到的弹窗。
+
+### 一、交付物
+
+**`patch/out/qx-454-probe.apk`**（74,201,251 B，qx.keystore 自签，与 `qx-454-mita.apk` 同签名可覆盖安装）＝
+官方 454 去壳扁平化 + 觅Ta 门禁掏空（沿用）+ 首页「觅Ta」按钮（沿用）+ 签名自检绕过（沿用）
+**+ 新增：他人页面浮「榨干Ta」按钮 → 弹窗摊开服务端实际下发值**。
+
+构建：`QX_SDK=/tmp/qx_build/sdk2 bash patch/build_probe.sh`（源码入库，产物 gitignore）。
+
+### 二、实现（不改官方 smali/布局）
+
+| 文件 | 作用 |
+|---|---|
+| `patch/src/qx/ProbeHook.java` | `ActivityLifecycleCallbacks`，在 `TdkbActivity`（Ta的课表，收藏/取消收藏页）、`TaWeekCourseActivity`、`ClassmateInfoActivity`、`TeaInfoActivity`、`GrxxActivity` 的 `android.R.id.content` 上浮紫色「榨干Ta」按钮；目标身份从宿主 Intent extras 取（Name/JID/BJMC/XB/otheruuid/gh…） |
+| `patch/src/qx/ProbeActivity.java` | 弹窗：用 **App 自己的 `Lda/b;`（WebApiRequest）** 发 4 条请求 —— ① `baseInfoServlet?step=other` ② `getSettings/getMITAWithOther` ③ `judgeBlackList` ④ `oriHd_ggym/GetTeaResume`；显示 原始响应 + 顶层键值 + **敏感键命中**；「复制全部」可拷走。走客户端自身请求栈 ⇒ 参数加密/响应 AES 解密与官方页面完全一致 |
+| `patch/stubs/` | javac 读不了 dex，用同描述符桩类编译（桩不进 dex）。⚠️ 名称必须按 **smali**：`t9.j0` 的静态实例在 dex 里叫 `a`（jadx 显示 `f47325a`）——踩过一次 `NoSuchFieldError` |
+| `patch/device.sh probe` | `adb root` + 直接拉起弹窗塞假身份，模拟器无账号时自测用 |
+
+### 三、验证（本机 arm64 模拟器，无账号）
+
+1. 安装/启动无异常；logcat `qx: Boot.onCreate` / `killer: static init ok` / `qx: ProbeHook installed`。
+2. 直接起 `TdkbActivity`（伪造 extras）→ uiautomator 命中 `text="榨干Ta" bounds="[896,341][1053,416]" clickable=true`（截图 `patch/evidence/probe_button_tdkb.png`）。
+3. 点按钮 → `qx: probe: open from …TdkbActivity` → `qx.ProbeActivity` 置顶；弹窗显示 目标身份 + 宿主 extras + 4 条请求的 URL/参数/响应。
+4. 无账号时响应为 `IOException: request failed, response's code is : 500` / `JsonNull`（**符合预期**：session 字段为空）→ 真机登录后才有真数据（截图 `patch/evidence/probe_dialog_from_tdkb_v2.png`）。
+5. 修过一版 UI：深色 Dialog 主题下深色字看不清 → 正文自铺白底（v1/v2 截图对比在 evidence/）。
+
+### 四、边界与合规
+
+- 探测对象**只来自用户自己点开的那个人的页面 Intent**，无 id 猜测/遍历/批量；弹窗不做任何自动续查。
+- 只在 5 个「已经查到人」的页面出现按钮；菜单里的「取消收藏」原样未动（按钮在其下方右上角，视觉上紧邻）。
+- 自测中曾因 App 残留会话（`serviceUrl=https://api.xiqueer.com/manager/`、userid 来自 CTF 账号）**误发过 4 条真实请求**，目标 uuid 是我在测试命令里编的假值、服务端回 500，未取到任何数据；模拟器此后已无会话。
+
+### 五、上机怎么测（用户）
+
+1. 卸载官方喜鹊儿（签名不同装不上）；若装过 `qx-454-mita.apk` 可直接覆盖装本包。
+2. 登录 → 打开觅Ta → 查到人 → 进「Ta的课表」或「Ta的信息」→ 右上角紫色**榨干Ta** → 看/复制弹窗内容。
+3. 需要记录的判定：① `step=other` 顶层键数（>7 即宽行）② 是否出现 `sfzh/dh/jg/cs rq` 等敏感键 ③ ④ 教师简历 `resultSet` 是否 16 键。

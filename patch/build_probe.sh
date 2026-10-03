@@ -70,7 +70,7 @@ SRC="$BUILD/classes"; rm -rf "$SRC" "$BUILD/dex"; mkdir -p "$SRC" "$BUILD/dex"
 javac -nowarn --release 8 -classpath "$AJAR:$STUB" -d "$SRC" \
   $(find "$WS/patch/src/qx" -name '*.java' | grep -v -e '/BootDump.java' -e '/Dumper.java' -e '/Smoke.java')
 java -cp "$R8" com.android.tools.r8.D8 --min-api 21 --lib "$AJAR" --output "$BUILD/dex" \
-  $(find "$SRC" -name '*.class') > "$BUILD/d8.log" 2>&1
+  --classpath "$STUB" $(find "$SRC" -name '*.class') > "$BUILD/d8.log" 2>&1
 mv "$BUILD/dex/classes.dex" "$BUILD/classes7.dex"
 echo "   classes7.dex $(wc -c < "$BUILD/classes7.dex") bytes"
 

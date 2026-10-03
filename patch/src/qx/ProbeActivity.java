@@ -61,7 +61,7 @@ public class ProbeActivity extends Activity {
     private TextView status;
     private final StringBuilder all = new StringBuilder();
 
-    private String name = "", xb = "", bjmc = "", jid = "", uuid = "", utype = "";
+    private String name = "", xb = "", bjmc = "", jid = "", uuid = "", utype = "", host = "", raw = "";
     private List<Q> queue = new ArrayList<Q>();
     private int idx = 0;
 
@@ -96,7 +96,14 @@ public class ProbeActivity extends Activity {
         buildUi();
         readExtras();
         resizeWindow();
-        runAll();
+        try {
+            runAll();
+        } catch (Throwable t) {
+            // 链接期错误（混淆名对不上等）不能把页面打死——直接把异常摊在弹窗里
+            Log.e(TAG, "runAll failed", t);
+            headerLine("!! 初始化失败：" + t + "\n");
+            status.setText("初始化失败（把这段截给开发者）");
+        }
     }
 
     private void resizeWindow() {
@@ -113,13 +120,14 @@ public class ProbeActivity extends Activity {
     private void buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.WHITE);   // 主题是深色 Dialog，正文深色字 → 自己铺白底
         int p = dp(10);
         root.setPadding(p, p, p, p);
 
         TextView head = new TextView(this);
         head.setTag("qx_header");
         head.setTextSize(13f);
-        head.setTextColor(Color.parseColor("#111111"));
+        head.setTextColor(Color.parseColor("#000000"));
         root.addView(head);
 
         status = new TextView(this);
@@ -184,6 +192,8 @@ public class ProbeActivity extends Activity {
             jid = str(b, "qx_jid");
             uuid = str(b, "qx_uuid");
             utype = str(b, "qx_type");
+            host = str(b, "qx_host");
+            raw = str(b, "qx_raw");
         }
         if (TextUtils.isEmpty(uuid)) {
             uuid = jid;
@@ -208,12 +218,12 @@ public class ProbeActivity extends Activity {
             out.setText("");
         }
 
-        String base = j0.f47325a == null || j0.f47325a.serviceUrl == null
-                ? "" : j0.f47325a.serviceUrl;
-        String myId = j0.f47325a == null || j0.f47325a.userid == null ? "" : j0.f47325a.userid;
-        String myType = j0.f47325a == null || j0.f47325a.usertype == null ? "" : j0.f47325a.usertype;
+        String base = j0.a == null || j0.a.serviceUrl == null
+                ? "" : j0.a.serviceUrl;
+        String myId = j0.a == null || j0.a.userid == null ? "" : j0.a.userid;
+        String myType = j0.a == null || j0.a.usertype == null ? "" : j0.a.usertype;
 
-        header("目标：" + dash(name) + "｜性别 " + dash(xb) + "｜班级 " + dash(bjmc)
+        header("来源页面：" + dash(host) + "\n目标：" + dash(name) + "｜性别 " + dash(xb) + "｜班级 " + dash(bjmc)
                 + "\nJID：" + dash(jid) + "｜uuid：" + dash(uuid) + "｜身份 " + dash(utype)
                 + "\n自己：" + dash(myId) + " / " + dash(myType)
                 + "｜serviceUrl：" + dash(base));
@@ -222,6 +232,9 @@ public class ProbeActivity extends Activity {
             status.setText("未登录 / 拿不到 serviceUrl —— 请先登录再打开本页");
             render();
             return;
+        }
+        if (!TextUtils.isEmpty(raw)) {
+            headerLine("── 宿主页面收到的原始 extras ──\n" + raw);
         }
 
         HashMap<String, String> m1 = new HashMap<String, String>();
