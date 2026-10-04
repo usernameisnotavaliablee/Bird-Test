@@ -873,3 +873,35 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 1. 卸载官方喜鹊儿（签名不同装不上）；若装过 `qx-454-mita.apk` 可直接覆盖装本包。
 2. 登录 → 打开觅Ta → 查到人 → 进「Ta的课表」或「Ta的信息」→ 右上角紫色**榨干Ta** → 看/复制弹窗内容。
 3. 需要记录的判定：① `step=other` 顶层键数（>7 即宽行）② 是否出现 `sfzh/dh/jg/cs rq` 等敏感键 ③ ④ 教师简历 `resultSet` 是否 16 键。
+
+---
+
+## 2026-10-04 · 真机反馈修版：教师查询「学生工号无数据属正常」+ usertype=STU 释疑
+
+用户真机回报（教师「陈磊」）→ 逐条定性，改动落在 `patch/src/qx/ProbeActivity.java`，产物重出 `patch/out/qx-454-probe.apk`。
+
+### 一、定性：服务端行为 vs 我们的问题
+
+| 现象 | 定性 | 依据 |
+|---|---|---|
+| ① 18 键宽行、`state=0` 仍下发 | **服务端行为**（重大发现） | 目标开关 `mita=0`，服务端照样回 姓名/性别/学校/部门/账号 + `msg=人力系统未对接` |
+| `xueli/xuewei/gangwei/zhichen/jg` 键在值空 | **服务端行为** | 与 `msg=人力系统未对接` 自洽（该校未接人事系统） |
+| ② 隐私门 msg | **服务端行为** | 与 ① `state=0` 自洽 |
+| ④ `jsid=10250137` → `{"resultSet":[]}` | **可能是我们的请求问题** | 官方调用点是 native；① 里另有 `jsdm=t1001122`，jsid 到底取哪个未定论 ⇒ 改成两个候选都发 |
+| ④ 标签写「学生工号无数据属正常」 | **我们的文案 bug** | 目标是教师，标签写死了"学生"，已改动态 |
+| 参数里 `usertype=STU` | **正常，非 bug** | 那是**查询者自己**的身份；官方 `e2/a.java:584-629` 的 l/m/n 就是 `usertype=j0.usertype`=自己，目标由 `otheruuid` 指定 |
+
+### 二、本版改动（v3）
+
+1. ④ 动态入队：① 回来后取 `jsdm`，**两个 jsid 候选各发一遍**（jsdm 教师号 / JID 后缀平台号），标签带上是哪个；目标不是教师且无 jsdm 时跳过并说明。
+2. ② 按官方两处不一致写法**各发一遍**：`usertype=自己`（e2/a 写法）与 `usertype=对方`（u8/v 写法）。
+3. 解析显示：空值标 `← 键在值空`；敏感键标 `(空)/(有值)`；多一行 `服务端 msg`；含 resultSet/state/flag 时给 **宽行/窄行判定**（>7 键=宽行）。
+4. 敏感键表补教师/人事侧键：jsdm/bm/gangwei/zhichen/xueli/xuewei/xznj/rxnf/xxmc。
+
+### 三、验证（模拟器，无账号）
+
+`TaWeekCourseActivity`（extras 照用户回报：name=陈磊/mJid=10475_10250137/userType=TEA）→ 按钮在（bounds [896,341][1053,416]）→ 点开 → 弹窗按 5 条（①/②a/②b/③/④）跑完，无崩溃；无 session 时响应为 500/JsonNull（预期）。截图 `patch/evidence/probe_v3_teacher_flow.png`。
+
+### 四、待用户复测回答
+
+① ④ 两个 jsid 候选哪个有数据（若都空 ⇒ 归因 `人力系统未对接`，与我们无关）；② 学生目标的 `step=other` 是否同样宽行/是否同样无视对方开关。
