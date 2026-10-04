@@ -227,3 +227,31 @@ PY
 # 觅Ta 相关行定位
 grep -rn 'getMITA\|judgeBlackList\|GetTeaResume\|getCourse_Detail_hd\|step", "other"' analysis/latest/plain_jadx/sources | head -40
 ```
+
+---
+
+## 8. 首次真机样本（2026-10-04，教师目标，用户实测）
+
+查询者：学生（自己开关已开）；目标：教师「陈磊」，`uuid=10475_10250137`、① 里 `jsdm=t1001122`、`bm=[1025]软件学院`。
+
+**① `baseInfoServlet?step=other`（GET，参数 userId/usertype=自己 STU、otheruuid=目标）= 18 键宽行**：
+
+```json
+{"msg":"人力系统未对接","jsdm":"t1001122","xznj":"","xb":"男","bm":"[1025]软件学院","rxnf":"",
+ "userid":"10250137","uuid":"10475_10250137","xxmc":"河南大学","gangwei":"","zhichen":"",
+ "xxdm":"10475","xueli":"","xm":"陈磊","xuewei":"","mita":"0","state":"0","jg":""}
+```
+
+要点：
+1. **宽行实锤**：顶层 18 键 ≫ 官方客户端消费的 7 个路由字段（xm/xb/xxdm/xh|jsdm|userid/ssbj/state）。⇒ 「解析面过宽 + 服务端裁剪不足」成立，报告可写"水平越权面"（数据面口径见 §0/§2）。
+2. **目标开关是关着的**（`mita=0`、`state=0`），服务端**照样下发了这条记录**（姓名/性别/学校/部门/账号），只在 `msg` 里告知 `人力系统未对接`；② 才回隐私门文案 → 说明 `step=other` 的下发**不以对方开关为前置**（至少教师样本如此）。样本量=1，学生目标待补。
+3. 教师专属键 `bm`(部门/学院)、`gangwei`(岗位)、`zhichen`(职称)、`xueli`(学历)、`xuewei`(学位) 全部**键在值空** —— 与 `msg=人力系统未对接` 一致：该校没接人事系统。
+4. `jg`(籍贯) 也是**键在值空**：之前静态结论「籍贯不下发」需要改成「**下发但在该校为空**」。
+
+**④ `oriHd_ggym&step=GetTeaResume`**：`jsid=10250137`（JID 后缀=平台号）→ `{"resultSet":[]}`。**未定论**：官方调用点是 native，看不到 `jsid` 到底取 `jsdm`(t1001122) 还是平台号；探测弹窗已改成**两个候选都发**（并修掉误标的"学生工号"文案）。若两个都空，则空结果归因于 `人力系统未对接`（服务端），与 `jsid` 无关。
+
+**② `getSettings&step=getMITAWithOther`**：`{"state":"0","msg":"由于对方设置【觅TA】隐私开关，您无法查看其信息"}` —— 与 ① 的 `state=0` 自洽；弹窗现在按官方两处不一致的写法（e2/a 用自己 usertype、u8/v 用对方 usertype）**各发一遍对照**。
+
+**③ `judgeBlackList`**：`{"msg":"互相不是黑名单","flag":"0"}` —— 正常放行。
+
+> 参数口径澄清（用户问过）：三条请求里的 `usertype=STU` 是**查询者自己**的身份，不是把老师当学生查（官方 `e2/a.java:584-629` 的 l/m/n 就是这么发的：`usertype=j0.usertype`=自己；目标由 `otheruuid` 指定）。目标类型只出现在 ③ 的 `tousertype` 与 ② 的一种写法里。
