@@ -1,5 +1,7 @@
 # Local operating-system and editor metadata
 .DS_Store
+__pycache__/
+*.pyc
 /.claude/
 
 # Reproducible APK extraction, decompilation, and runtime caches
@@ -16,3 +18,7 @@
 
 # Built/patch outputs: large APKs (rebuild with patch/build.sh)
 /patch/out/
+
+# Timetable tool outputs: raw responses contain PII; reports are run artifacts
+/timetable/runs/
+/timetable/config.local.json

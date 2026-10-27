@@ -905,3 +905,41 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 四、待用户复测回答
 
 ① ④ 两个 jsid 候选哪个有数据（若都空 ⇒ 归因 `人力系统未对接`，与我们无关）；② 学生目标的 `step=other` 是否同样宽行/是否同样无视对方开关。
+
+---
+
+## 2026-10-27 · 新课表工具：批量查询 + 课余时间 HTML 可视化（timetable/）
+
+记录时间：2026-10-27T19:05:00+08:00。触发：用户要求在工作区新建目录，写 Python 脚本对给定名单批量查课表/课余时间，保留原始数据并输出 HTML；UA 等请求头先留占位。
+
+### 一、交付物（入库）
+
+- `timetable/query.py`：单文件、仅标准库。名单 CSV → 逐个 POST → 原始 JSON 落盘 → 解析忙闲节次 → HTML 报告；含 `--selftest` 编码向量、`--demo` 合成数据、`--from-raw` 离线重渲染、`--dry-run`、限速/重试/错误落盘。
+- `timetable/README.md`：用法、协议、名单格式、输出目录、请求头占位、限制与合规。
+- `timetable/roster.example.csv`：合成名单（张三/李四/王五 + 假学号）。
+- `.gitignore`：新增 `/timetable/runs/`（原始响应含 PII）、`/timetable/config.local.json`、`__pycache__/`、`*.pyc`。
+
+### 二、协议（实测坐实）
+
+- 学校 jw 厂商端点：`POST {jw_url}/wap/mycourseschedule.action`，表单仅 `param` + `param2`，**不需要 token/Cookie/UA**（HENU 实测空 UA 也 200）。
+- 明文：`jsdm=&week=<周>&xnxq=<学期>&usertype=STU&userid=<学号>&bjdm=`；`week` 空=服务器当前周，显式传 `10` 即第 10 周。
+- `param` = `ba.b.k()` 移植（base36 流密码）；`param2` = `ba.b.f()` 移植（md5→删第 3/11/18/26 字符→再 md5）。已用 Java 参考实现生成固定向量写入 `--selftest`。
+- key = 登录响应 `info[os=="jw"].encrpt`；`--key-from-login` 只读该字段和同项 `url`，不读 token/账号/密码。本次验证用本地抓包登录响应 `analysis/captures/login_resp_plain_0910.json`（gitignored），未把 key 写入脚本。
+- UA/Referer/Origin/Cookie 在 `HEADER_PLACEHOLDERS` 中留空占位，可用 `--user-agent` / `--header K:V` 覆盖。
+
+### 三、验证
+
+1. `python3 timetable/query.py --selftest` → `selftest OK`（编码向量、节次解析、空闲区间、共同空闲、HTML 关键字）。
+2. `--demo` → 3 人合成数据，生成 `runs/demo-*/report.html` + 3 份 raw；HTML 含个人格子、热力图、全员空闲段、名单总览、原始 JSON 链接。
+3. live 本人测试账号（学号不落盘）：week 空 → 第 09 周（2026-10-26~11-01）10 门课、忙 22 节、空闲 83 节；`--week 10` → 第 10 周（11-02~11-08）同 10 门。原始响应 4.6KB/份。
+4. 批量冒烟：名单 3 行 = 本人 + 两个明显无效空号；3/3 HTTP 200，工具正确区分“有课”和“空课表”。空课表（0 门）无法与“学号不存在”区分，报告已加“空课表”徽标与提示。
+5. 错误路径：连 `127.0.0.1:9` → `URLError: Connection refused`，报告生成“失败明细”，manifest 记录错误；不丢 raw（无 raw 时为空）。
+6. `--from-raw` 离线重渲染通过；`--dry-run` 不联网；`--out` 自定义路径时 raw 链接已改为相对正确路径。
+
+### 四、边界与下一步
+
+- 本工具只查名单里的学号，不猜/不枚举；live 必须 `--authorized`，默认 3 秒/请求。**未对任何其他真实学生发起查询**；批量冒烟只用本人 + 两个无效号。
+- 空闲时间按“节次”算（1..maxjc），不猜上下课钟点；要精确到分钟需接入各校节次时间表。
+- 只支持 `mycourseschedule.action` 这一种 jw 接口；其他学校若字段/接口不同，改 `build_plain()` / `normalize_schedule()`，必要时用 `--header` 传 Cookie。
+- 待用户提供授权名单后跑真实批量；若目标学校要求登录态，再补登录/Cookie 路径。
+- 本轮产出目录 `timetable/runs/` 均 gitignored，未入库任何真实课表/PII。
