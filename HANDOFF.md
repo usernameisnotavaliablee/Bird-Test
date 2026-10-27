@@ -943,3 +943,37 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 - 只支持 `mycourseschedule.action` 这一种 jw 接口；其他学校若字段/接口不同，改 `build_plain()` / `normalize_schedule()`，必要时用 `--header` 传 Cookie。
 - 待用户提供授权名单后跑真实批量；若目标学校要求登录态，再补登录/Cookie 路径。
 - 本轮产出目录 `timetable/runs/` 均 gitignored，未入库任何真实课表/PII。
+
+---
+
+## 2026-10-27 · 「Ta 的课表 → 课程详情班名单」客户端补丁（probe 版，待手机实测）
+
+记录时间：2026-10-27T21:26:00+08:00。触发：用户要求查某老师课表时，点课程即可看该班学生花名册，形态同「我的课表」。
+
+### 一、根因（静态）
+
+- `Home_F.I0(...)` 对所有课表模式都在打开详情前请求 `getKb&step=skbjmc`，回调 `Home_F$x.callback` 把 `resultSet` 解析到 `p1`。
+- `Home_F$x.callback` 开头 `const-string v0, "[]"`；`tdkb`（Ta 的课表）分支把 `v0` 作为 `classmatesList`，所以名单永远为空；wdkb/jskb/bjkb 用的是 `p1`。
+
+### 二、改动
+
+- 新增 `patch/patch_roster.py`（幂等，带 `--check`）：在 `Home_F$x.smali` 的 tdkb 分支 `if-eqz v1, :cond_1` 之后、Intent 构造之前插入 `move-object v0, p1`。不发新请求、不改参数、不改 `rs`/`soure`/`kbtype`。
+- 底包：`patch/out/qx-454-probe.apk`（74,201,251 B，SHA-256 `5e06eb82…`）。
+- 产物：`patch/out/qx-454-probe-roster.apk`（74,258,595 B，SHA-256 `dc40b50b…`，v1+v2+v3 自签，`patch/qx.keystore`）。
+- 构建工具：build-tools r33.0.2（/tmp，未入库）。
+
+### 三、静态验证
+
+- `python3 patch/patch_roster.py --check /tmp/qx_plan/probe` → OK；未打补丁的底包 → MISSING。
+- `apksigner verify -v`：v1/v2/v3 true，signer DN `CN=qx`；`aapt2 dump badging`：包名/版本 2.6.454、targetSdk 33。
+- 反编产物 vs 底包 diff：仅 `Home_F$x.smali` 多 `move-object v0, p1`（classes2.dex +4 B）；其余 smali/资源/manifest 不变；`qx.Boot` provider、`qx.MitaEntry` 保留，无 `assets/origin.apk`/`libzprotect.so`。
+- 未跑模拟器：/tmp SDK/AVD 已清空、无有效 APP 测试账号、旧抓包会话过期。
+
+### 四、待实测
+
+- 安装 `qx-454-probe-roster.apk`（同签名可覆盖 probe）→ 登录 → Ta 的课表 → 点课程 → 课程详情应出现同学头像/名单。
+- 若仍空：`adb logcat -s gggg` 看 `resultSet` 是否为空；非空但 UI 空 → 详情页 `soure=ta`/`rs=0` 闸门，再补；空 → 服务端拒绝，不换接口、不枚举。
+
+### 五、边界
+
+- 只显示服务端已返回给当前账号的名单；不构造请求、不绕过服务端授权、不批量/枚举。若发现未授权课程也下发，记录证据走负责任披露，不扩大取数。
