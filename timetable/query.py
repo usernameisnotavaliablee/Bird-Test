@@ -286,7 +286,6 @@ def fetch_schedule(
     headers: dict[str, str],
     timeout: float,
     retries: int,
-    dry_run: bool = False,
 ) -> dict[str, Any]:
     plain = build_plain(student["student_id"], semester, week)
     param = encode_param(plain, key)
@@ -300,10 +299,6 @@ def fetch_schedule(
         "raw_text": "",
         "error": None,
     }
-    if dry_run:
-        result["error"] = "dry-run"
-        return result
-
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
@@ -676,6 +671,15 @@ def _write_raw(run_dir: Path, student_id: str, text: str) -> str:
 def run_query(args: argparse.Namespace) -> int:
     if not args.authorized:
         raise SystemExit("live 模式需要 --authorized：确认名单中的每个人你都有权查询")
+    roster = read_roster(args.roster)
+    if args.limit:
+        roster = roster[:args.limit]
+    if args.dry_run:
+        for idx, student in enumerate(roster, 1):
+            print(f"[{idx}/{len(roster)}] {student['name']} {student['student_id']}")
+            print("  " + build_plain(student["student_id"], args.semester, args.week))
+        print(f"dry-run: {len(roster)} 条请求未发送")
+        return 0
     if not args.key and not args.key_from_login:
         raise SystemExit("live 模式需要 --key 或 --key-from-login")
     base_url = args.base_url
@@ -694,9 +698,6 @@ def run_query(args: argparse.Namespace) -> int:
     if not key:
         raise SystemExit("没有可用的 jw key")
     base_url = base_url or DEFAULT_BASE
-    roster = read_roster(args.roster)
-    if args.limit:
-        roster = roster[:args.limit]
 
     run_id = args.run_id or _default_run_id("live")
     run_dir = _make_run_dir(Path(args.run_root), run_id)
@@ -718,7 +719,7 @@ def run_query(args: argparse.Namespace) -> int:
         print(f"[{idx}/{total}] {student['name']} {student['student_id']} ...", flush=True)
         fetched = fetch_schedule(
             base_url, key, student, args.semester, args.week, headers,
-            args.timeout, args.retries, dry_run=args.dry_run,
+            args.timeout, args.retries,
         )
         raw_rel = ""
         if fetched.get("raw_text"):
