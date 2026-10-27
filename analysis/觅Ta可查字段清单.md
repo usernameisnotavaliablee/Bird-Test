@@ -29,7 +29,7 @@
 | 17 | **籍贯 / 专业 / 入学年级 / 姓名 / 性别 / 身份** | **作为搜索条件**（=服务端可检索字段，可当"验证 oracle"用） | 强（布局恒定） |
 | 18 | 个人相册 / 随手记 / 跳蚤市场 | 他人信息页内嵌区（layout 有 id） | 弱：客户端有"功能不可用！"文案 |
 | 19 | 他人信息页**动态明细行**（任意 label:value，schema 见 §3） | baseInfoServlet?step=other 响应 → native 行构造器 | **静态不可读（VMP）** |
-| 20 | **同班同学名录**：姓名/性别/班级/用户学号/入学时间/是否在住 | `StudentListActivity` ← `StudentListBean.classmatesList[]` | 强（Gson，Java 可见） |
+| 20 | **同班同学名录**：姓名/性别/班级/用户学号/入学时间/是否在住 | `StudentListActivity` ← `StudentListBean.classmatesList[]` | 强（Gson，Java 可见）；⚠️ 请求构造在 native（`onCreate`），端点名不可直证 |
 | 21 | **扫码身份页**（`hqsf xqxt\|<uuid>`）：学校/工号/学号/姓名/身份 | `GrxxActivity`（布局 `activity_grxx.xml`） | 强（布局静态 5 行） |
 
 **明确查不到（静态 0 证据）**：身份证号（学生）、高考号、政治面貌、出生地、生源地、毕业中学、邮箱、家长/家庭信息、地址、宿舍、成绩、考勤、借阅——**觅Ta 链路上不存在对应端点**；这些字段仅在「查自己」或教师端页面出现（`activity_person_stu_information.xml` 等）。
@@ -78,6 +78,7 @@
 | 课表 | — | `resultSet`、`state`；`xnxq[]`、`jcbw/jcsw/jcws/jcxw/jczs/jczw/jcflag`、`qssj/jssj/zc` | `TdkbActivity.java:74`；`TaWeekCourseActivity` |
 
 **响应加密**：`da/b.java:306-307` 对 `/wap/baseInfoServlet` 与 `getLoginInfoNew` 的响应做 AES 解密（key `loginkeyapp93214` / iv `12fg45gpsdfz34ab`）→ 抓包必须解密（工具 `analysis/tools/decrypt_xqr.py`）。
+**响应处理流水线（2026-10-27 补充，详见 `analysis/查他人接口响应解析面.md` §1）**：整包 AES（仅上述两端点）→ `t9.m.e` 容错 JSON 修复 → `t9.m.d` 的 `*_desn` 字段级解密（服务端下发 `xxx_desn` 时客户端自动还原 `xxx`）→ callback。`GetTeaResume` / `getKb&step=skbjmc` 不走整包 AES，但可能走 `*_desn` 字段解密。
 
 ---
 
@@ -189,7 +190,7 @@
   - `TeaInfoActivity`、`MitaNewActivity.C2/D2/E2`、`ClassmateInfoActivity.E2/M2/O2/S1/T1`
 - ⇒ **静态读不出**：① 他人信息页动态行的完整标签/键集合；② 觅Ta 搜索请求的 `action/step` 名。
 - ⇒ **可读**：行 schema（§3）、搜索结果结构与列表字段（§3/§4）、所有非 native 端点的取键（§2）。
-- ⚠️ **端点归属的证据等级**：`ClassmateInfoActivity`/`TeaInfoActivity` **自身**发出的那条主信息请求（回调 `l`/`m` 取 `mita`/`xm`/`xb`/`uuid`，`:526-635`/`:637-746`，失败分支弹"未开启【觅Ta】服务"）构造在 native，**454 Java 里看不到它的 URL**。「它就是 `baseInfoServlet?step=other`」目前靠两点间接支撑：(a) `t9/t0` 闸门通过后 Java 直调 `e2/a.l/m/n`（= `step=other`）拉起这两个页面；(b) 先前会话的 435/452 静态比对（`改版深度探索文档.md`、`数据面与监控组件深挖.md`）。引用时按"高置信但非 454 直证"对待。
+- ✅ **端点归属的证据等级（2026-10-27 升级为「强」）**：`ClassmateInfoActivity`/`TeaInfoActivity` **自身**发出的那条主信息请求（回调 `l`/`m` 取 `mita`/`xm`/`xb`/`uuid`，`:526-635`/`:637-746`）构造在 native，Java 看不到 URL。判定为 `baseInfoServlet?step=other` 的三条支撑：(a) `t9/t0` 闸门通过后 Java 直调 `e2/a.l/m/n`（= `step=other`）拉起页面；(b) **键集匹配**——`{mita,xm,xb,uuid}` ⊆ 真机 `step=other` 18 键样本；(c) **排他性**——`getMITAWithOther` 只回 `state/msg`、`getMITA` 只回 `state`，同页链路上没有第二个端点能提供这组键。仍建议抓包做最终直证（一次信息页应出现两条 `baseInfoServlet`：闸门 + 页面内）。
 - ⚠️ 本工作区现有抓包 `analysis/captures/flows_20260910_mitm.bin` 里**没有任何觅Ta 流量**（`getMITA`/`judgeBlackList`/`baseInfoServlet` 0 命中）→ native 部分目前也无法动态补证；要拿准只能 hook `da.b` 的请求构造/回调或重抓。
 
 ---
@@ -197,6 +198,8 @@
 ## 6. 与 435/452 的一致性 & 待实测项
 
 一致性（已用 452 官方 payload 明文树 `analysis/original/payload_plain_jadx/sources/` 复核）：`classmate_info.xml` / `activity_mita_new2.xml` 字段在两版相同；`JsxqBean` 16 字段相同（452 `bean/HYDX/bean/JsxqBean.java` 同为 `private String × 16`）；`step=other` 三处调用点同址（452 `e2/a.java:589/605/621` ↔ 454 `e2/a.java:590/606/622`）；信息页取键同为 `mita/xm/xb/uuid/flag`。改版（435）的差异只在**门禁被掏空**，不改字段面。
+
+> 2026-10-27 追加：`patch_roster.py` 的语义已用 454 smali 直证（`Home_F$x.callback` 的 tdkb 分支处 `p1` 已是 `resultSet` 或 `"[]"`）；名单链路双 schema（`classmatesList` → `t9.m.b` 注入 `uuid` → `resultSet`）详见 `analysis/查他人接口响应解析面.md` §4。
 
 需动态（真机 + 抓包，手册 §4）才能定性的 4 条：
 1. `step=other` 对**未开觅Ta**的对方实际下发宽行还是窄行（= 漏洞定性的核心）。

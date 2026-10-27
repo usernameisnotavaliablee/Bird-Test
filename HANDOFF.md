@@ -977,3 +977,38 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 五、边界
 
 - 只显示服务端已返回给当前账号的名单；不构造请求、不绕过服务端授权、不批量/枚举。若发现未授权课程也下发，记录证据走负责任披露，不扩大取数。
+
+---
+
+## 2026-10-27 · 查他人接口「响应解析面」逐回调定稿：三道响应处理 / mita fail-open / 名单双 schema / roster 补丁 smali 直证
+
+记录时间：2026-10-27T22:10:00+08:00。触发：用户要求继续深挖「查他人接口响应解析面」。本轮纯静态（读 454 明文 jadx 树 + 454 smali），未联网、未跑 APK、未对任何真实他人发起请求。
+
+### 一、产出（入库）
+
+- **`analysis/查他人接口响应解析面.md`**（新）：把查他人链路 20 个 `da.b.f` 回调逐条读完，给出「请求 → 响应处理 → 读取键 → 异常分支 → 下游消费」全表，含名单链路专章与探测覆盖缺口。
+- **`analysis/tools/parse_surface_scan.py`**（新）：扫描 jadx 树所有 `implements da.b.f` 回调，导出宿主类/回调类/读取键/异常默认分支/行号（md + json）。454 全树实测 **1,141 个回调**，查他人链路 20 个。
+- **`analysis/觅Ta可查字段清单.md`**（更新 4 处）：补响应处理流水线；同班名录证据等级；信息页主请求证据升级为「强」；名单双 schema + roster 补丁直证。
+
+### 二、新结论（均带 454 文件:行号）
+
+1. **响应进 callback 前有三道处理**（旧记录只有第一道）：① `da/b.java:306-307` 对 `getLoginInfoNew` 与 `/wap/baseInfoServlet` 整包 AES 解密（`f41340n` 默认 true）；② `t9.m.e`（`t9/m.java:129+`）按 `assets/action.json` 厂商类型做容错 JSON 修复；③ `t9.m.d`（`t9/m.java:105-127`、`338-343`、`385+`）对任意 `xxx_desn` 字段递归 AES 解密并还原成 `xxx`。→ 服务端可用 `*_desn` 下发加密字段，客户端自动还原，解析面/展示面同时看到明文；`GetTeaResume`、`getKb&skbjmc` 不走整包 AES，但走第三道。
+2. **信息页/教师页 `mita` 闸门 fail-open**：`ClassmateInfoActivity.java:552-635/663-746`、`TeaInfoActivity.java:428-503/520-...` 中 `getString("mita")` 抛异常 → `z10 = true`，仍调 native `G2(str)`/`C2(str)` 渲染整包。与 `e2/a$e` 的 fail-closed（state 缺失静默不跳）相反。
+3. **信息页主请求 = `baseInfoServlet?step=other` 证据升级为「强」**：`l/m/j/k` 读 `{mita,xm,xb,uuid}` ⊆ 真机 18 键样本；`getMITAWithOther` 只有 `state/msg`、`getMITA` 只有 `state`（排他性）；同页调用链上只有 `e2/a.l/m/n`。仍建议抓包直证（一次信息页应见两条 baseInfoServlet）。
+4. **名单链路双 schema**：`getKb&step=skbjmc` 请求参数 `skbj=<教学班>`（`Home_F.java:2220-2240`/`:2320-2345`），**不含 bjdm/rs/目标 id**，四种课表模式共用。响应旧 schema `{"classmatesList":[...]}` 由 `t9.m.b`（`t9/m.java:67-89`）转成 `{"resultSet":[...]}` 并注入 `uuid=xxdm_yhxh`；是否转换取决于 `wsxk.zx.d.c=="0"`。消费端 `CourseDetailActivity.m2()` / `ClassmatesListActivity.X1()` 均 native；`StudentListBean`（`xm/xb/bjmc/yhxh/entertime/islive`）Gson 直证，展示只用 `yhxh/xm/islive/entertime`。
+5. **`patch_roster.py` 语义被 smali 直证正确**：临时把明文 `classes2.dex` 封成 APK 后 `apktool d -r`，`Home_F$x.smali:107-145` 显示 `p1` 已被 `getString("resultSet")` 覆盖（catch 时 `move-object p1, v0` 置 `"[]"`），tdkb 分支 `putExtra(classmatesList, v0)`。插入 `move-object v0, p1` 传的是名单数组，不是原始响应。
+6. **两个教师 JID 形态并存**：`e2/a$b`（学友圈入口）教师 JID 用 `jsdm`；`e2/a$c/$d`（信息页/扫码）用 `userid`。→ `GetTeaResume` 的 `jsid` 双候选设计正确。
+7. **`GetTeaResume` 前「查自己」是残留**：`x3/b.java:175+` 调 `baseInfoServlet`（无 step）→ `x3/b.java:63-73` Gson 成 27 字段 `UserInfoBean`（含 `sfzh/gkksh/zzmm/jtcyset`），但 `m()`（`:150-167`）只用 `userId/usertype/userid/jsid`，`userInfoBean` 从未被读。
+8. **探测版覆盖缺口**：现有 5 条未含 `getKb&step=skbjmc`、`oriHd_kc&step=getCourse_Detail_hd`、`getSettings&step=getMITA`（目标 userId）、`kingo_course&step=course_shoucang_*`。前两条是「他人课程详情/名单」核心，下一版应补（参数见新文档 §7）。
+
+### 三、验证与边界
+
+- `parse_surface_scan.py` 在 454 全树跑通（1,141 回调），重点 20 条与人工逐行阅读一致。
+- smali 验证用 `/tmp/qx_smali`（明文 classes2.dex + 官方 manifest/arsc 临时封包，apktool 3.0.3 `-r`），验证后未入库；`/tmp/qx_build/{flat,sdk2}` 已被清理，本轮未重建 APK。
+- 未联网、未运行 APK、未新增任何对他人数据的请求；文档只记键名与结论，不复制真机样本中的具体人名/账号。
+
+### 四、下一步
+
+1. 用户真机复测（probe-roster）：Ta 的课表 → 点课程 → 名单是否出现；若空，先看响应是 `classmatesList` 还是 `resultSet`（双 schema）。
+2. 真机抓包补证：信息页两条 `baseInfoServlet`；`getKb&skbjmc` 的 schema 与名单键集；学生目标 `step=other` 宽窄；`GetTeaResume` 两个 jsid。
+3. 需要时重建构建环境（build-tools r33 + platform-33 + R8），给 ProbeActivity 加 §7 的四条端点；不加遍历、只发当前页 id。
