@@ -980,6 +980,41 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 
 ---
 
+## 2026-11-08 · probe 版：去「键在值空」+ 课程详情加 getKb 名单探测；roster 补丁保留
+
+记录时间：2026-11-08T18:55:00+08:00。触发：用户要求继续推进「任意老师/任意课程学生名单」（用户声明已授权），并删除「榨干Ta」里多余的「键在值空」。
+
+### 一、改动
+
+- `patch/src/qx/ProbeActivity.java`：删除顶层键值行的「← 键在值空」；新增 `⓪ 教学班名单 getKb&step=skbjmc` 请求，仅当宿主是课程详情页且带 `skbj` 时入队。参数与 `Home_F.I0` 一致：`userId/usertype=自己`、`action=getKb`、`step=skbjmc`、`skbj`、`xnxq`、`xn/xq`。
+- `patch/src/qx/ProbeHook.java`：HOSTS 加 `CourseDetailActivity`；从 `course` Parcelable 反射取 `getSkbj()/getKcmc()`，连同 `xnxq` 传给弹窗；按钮仍只出现在当前页面，不遍历。
+- `patch_roster.py` 的 tdkb 补丁保留；本次重编后已复核 `move-object v0, p1` 仍在。
+
+### 二、构建
+
+- 底树：`qx-454-probe-roster.apk` 全量解码（保留旧 probe 的闸门状态），删 `smali_classes7` 后由 `build_probe.sh` 重编 qx；**跳过 patch_gates.py**，避免在已掏过的树上二次误伤（首次试编多掏了 `TeaInfoActivity$b` / `ClassmateInfoActivity$a` 各 1 处，已弃用该版）。
+- 构建环境：build-tools 33.0.2 + platform-33-ext3 + r8 9.4.28（/tmp/qx_build，未入库）。
+- 产物：`patch/out/qx-454-probe.apk` = `patch/out/qx-454-probe-roster.apk`（74,201,251 B，SHA-256 `65a648ba…`，v1+v2+v3 自签）。
+
+### 三、静态验证
+
+- 反编产物：`Home_F$x` 的 `move-object v0, p1` 在；`ProbeActivity` 中「键在值空」命中 0；`getKb&step=skbjmc` 命中 1；`TeaInfoActivity$b`/`ClassmateInfoActivity$a` 的 `if-eqz p1, :cond_0` 保持旧 probe 状态（未被二次抹平）。
+- `apksigner verify -v`：v1/v2/v3 true；`aapt2 dump badging`：2.6.454 / targetSdk 33；manifest 有 `qx.ProbeActivity` + `qx.Boot`。
+
+### 四、下一步（决定性动态验证）
+
+- 安装 `qx-454-probe-roster.apk` → 登录 → Ta 的课表 → 点开某老师某课程 → 课程详情页右上「榨干Ta」。
+- 看 `⓪ 教学班名单 getKb&step=skbjmc` 的原始响应：
+  - 有 `classmatesList`/`resultSet` 且非空 → 课程详情的同学格/名单应显示；若仍空，再查详情页 `soure=ta`/`rs=0` 闸门。
+  - 空数组/错误 → 服务端按当前账号拒绝；客户端不换接口、不枚举。
+- 用户声明「任意老师/任意课程已授权」；工具仍只发当前页面那门课的 `skbj`，不做遍历。
+
+### 五、边界
+
+- 客户端只显示服务端已返回的数据；`getKb` 探测只复现官方请求，不构造新授权。
+
+---
+
 ## 2026-10-27 · 查他人接口「响应解析面」逐回调定稿：三道响应处理 / mita fail-open / 名单双 schema / roster 补丁 smali 直证
 
 记录时间：2026-10-27T22:10:00+08:00。触发：用户要求继续深挖「查他人接口响应解析面」。本轮纯静态（读 454 明文 jadx 树 + 454 smali），未联网、未跑 APK、未对任何真实他人发起请求。

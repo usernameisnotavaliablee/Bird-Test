@@ -64,6 +64,8 @@ public class ProbeActivity extends Activity {
     private final StringBuilder all = new StringBuilder();
 
     private String name = "", xb = "", bjmc = "", jid = "", uuid = "", utype = "", host = "", raw = "";
+    /** 从 CourseDetailActivity 带过来：当前课程的教学班/学期，用于 getKb&step=skbjmc。 */
+    private String skbj = "", xnxq = "", kcmc = "";
     /** ① 响应里拿到的教师号（t 开头），用于拼 ④ 的 jsid 候选。 */
     private String jsdm = "";
     private boolean teacherQueued = false;
@@ -199,6 +201,9 @@ public class ProbeActivity extends Activity {
             utype = str(b, "qx_type");
             host = str(b, "qx_host");
             raw = str(b, "qx_raw");
+            skbj = str(b, "qx_skbj");
+            xnxq = str(b, "qx_xnxq");
+            kcmc = str(b, "qx_kcmc");
         }
         if (TextUtils.isEmpty(uuid)) {
             uuid = jid;
@@ -242,6 +247,22 @@ public class ProbeActivity extends Activity {
         }
         if (!TextUtils.isEmpty(raw)) {
             headerLine("── 宿主页面收到的原始 extras ──\n" + raw);
+        }
+
+        if (!TextUtils.isEmpty(skbj)) {
+            String xn = xnxq.length() >= 4 ? xnxq.substring(0, 4) : "";
+            String xq = xnxq.length() > 4 ? xnxq.substring(4) : "";
+            HashMap<String, String> m0 = new HashMap<String, String>();
+            m0.put("userId", myId);
+            m0.put("usertype", myType);
+            m0.put("action", "getKb");
+            m0.put("step", "skbjmc");
+            m0.put("skbj", skbj);
+            m0.put("xnxq", xnxq);
+            m0.put("xn", xn);
+            m0.put("xq", xq);
+            queue.add(new Q("⓪ 教学班名单 getKb&step=skbjmc（" + dash(kcmc) + "）",
+                    base + "/wap/wapController.jsp", "GET", m0));
         }
 
         HashMap<String, String> m1 = new HashMap<String, String>();
@@ -413,8 +434,7 @@ public class ProbeActivity extends Activity {
                 String k = it.next();
                 String v = o.optString(k);
                 n++;
-                keys.append("  ").append(k).append(" = ").append(v)
-                        .append(TextUtils.isEmpty(v) ? "   ← 键在值空" : "").append('\n');
+                keys.append("  ").append(k).append(" = ").append(v).append('\n');
                 for (String s : SENSITIVE) {
                     if (s.equalsIgnoreCase(k)) {
                         hits.append(k).append(TextUtils.isEmpty(v) ? "(空)" : "(有值)").append(' ');

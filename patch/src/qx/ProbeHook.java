@@ -38,7 +38,7 @@ public class ProbeHook implements Application.ActivityLifecycleCallbacks {
     private static final String PKG = "com.kingosoft.activity_kb_common.ui.activity.new_wdjx.new_kebiao.";
     private static final Set<String> HOSTS = new HashSet<String>(Arrays.asList(
             "TdkbActivity", "TaWeekCourseActivity", "ClassmateInfoActivity",
-            "TeaInfoActivity", "GrxxActivity"));
+            "TeaInfoActivity", "GrxxActivity", "CourseDetailActivity"));
     private static final String VIEW_TAG = "qx_probe_btn";
 
     /** 宿主 Intent 里可能承载目标身份的键（不同入口命名不一致，全试一遍）。 */
@@ -135,7 +135,25 @@ public class ProbeHook implements Application.ActivityLifecycleCallbacks {
             }
             out.putExtra("qx_raw", sb.toString());
         }
+
+        // 课程详情页：把当前课程的教学班号/学期带过去，供 getKb&step=skbjmc 探测。
+        Object course = src.getParcelableExtra("course");
+        out.putExtra("qx_skbj", call(course, "getSkbj"));
+        out.putExtra("qx_kcmc", call(course, "getKcmc"));
+        out.putExtra("qx_xnxq", src.getStringExtra("xnxq"));
         return out;
+    }
+
+    private static String call(Object o, String method) {
+        if (o == null) {
+            return "";
+        }
+        try {
+            Object v = o.getClass().getMethod(method).invoke(o);
+            return v == null ? "" : v.toString();
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     private static String first(Intent src, String[] keys) {
