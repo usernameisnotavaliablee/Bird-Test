@@ -1047,3 +1047,33 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 1. 用户真机复测（probe-roster）：Ta 的课表 → 点课程 → 名单是否出现；若空，先看响应是 `classmatesList` 还是 `resultSet`（双 schema）。
 2. 真机抓包补证：信息页两条 `baseInfoServlet`；`getKb&skbjmc` 的 schema 与名单键集；学生目标 `step=other` 宽窄；`GetTeaResume` 两个 jsid。
 3. 需要时重建构建环境（build-tools r33 + platform-33 + R8），给 ProbeActivity 加 §7 的四条端点；不加遍历、只发当前页 id。
+
+---
+
+## 2026-11-10 · 实测：名单已到 CourseDetailActivity，但 rs=0；补 rs=course.rs
+
+记录时间：2026-11-10T09:10:00+08:00。触发：用户真机在课程详情页跑「榨干Ta」回传结果。
+
+### 一、实测结论（只记键/计数，不记姓名）
+
+- 宿主 extras 已有 `classmatesList`：**21 条**，字段 `yhxh/xm/xb/bjmc/yxb/bj/zy/yxbmc/zymc/nj/njmc/tags/pycc/pyccmc/uuid`；`course` 里 `skbj=14865-001`、`skbmc=2026预科班`、`rs=21`、`kcmc=计算机基础（上）`。
+- `⓪ getKb&step=skbjmc` 原响应也是 `classmatesList` **21 条**，服务端没拒绝；`①/②/③` 因课程详情页没有目标 uuid 而空/500，正常。
+- 结论：请求、schema 转换、roster 补丁都通；问题只剩 **详情页显示**。tdkb 分支同时传了 `rs="0"`，与名单 21 人不一致；详情页 native 很可能按 `rs=0` 判空/隐藏同学区。
+
+### 二、改动
+
+- `patch/patch_roster.py` 增加第二条：tdkb 分支的 `putExtra("rs","0")` 换成 `CourseBean.getRs()`（当前课程 21）。保留第一条 `move-object v0, p1`。
+- 不改 `soure=ta`/`kbtype=tdkb`；先验证 `rs` 是否唯一显示闸门。
+- 重新构建：底树 = 旧 probe-roster 全量解码（保留旧闸门）+ 新 roster/rs 补丁 + 新 qx；跳过二次 patch_gates。
+- 产物：`patch/out/qx-454-probe-roster.apk`（74,201,251 B，SHA-256 `67337da4…`，v1+v2+v3 自签）。
+
+### 三、静态验证
+
+- 反编：tdkb 分支 `classmatesList` 用 `v0=p1`；`rs` 用 `CourseBean.getRs()`；`ProbeActivity` 的 `⓪` 与去「键在值空」保留；`TeaInfoActivity$b`/`ClassmateInfoActivity$a` 仍是旧 probe 状态。
+- `patch_roster.py --check` 在最终树上 OK；`apksigner verify -v` v1/v2/v3 true。
+
+### 四、下一步
+
+- 用户重装 `qx-454-probe-roster.apk` → Ta 的课表 → 点课程 → 看同学区/名单。
+- 仍不显示 → 下一版把 tdkb 的 `soure/ta`、`kbtype/tdkb` 改为 `wdkb/wdkb` + `wdkb_flag=true`，按「我的课表」详情页路径渲染；只动客户端 Intent extras。
+- 不换接口、不枚举；`classmatesList` 已由服务端按当前账号下发。
