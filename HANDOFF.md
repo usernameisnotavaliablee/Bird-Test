@@ -1077,3 +1077,32 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 - 用户重装 `qx-454-probe-roster.apk` → Ta 的课表 → 点课程 → 看同学区/名单。
 - 仍不显示 → 下一版把 tdkb 的 `soure/ta`、`kbtype/tdkb` 改为 `wdkb/wdkb` + `wdkb_flag=true`，按「我的课表」详情页路径渲染；只动客户端 Intent extras。
 - 不换接口、不枚举；`classmatesList` 已由服务端按当前账号下发。
+
+---
+
+## 2026-11-10 · 直接复用官方「同学列表」页（ClassmatesListActivity）
+
+记录时间：2026-11-10T09:55:00+08:00。触发：用户给出目标截图——标题「同学列表」、头部 `[bjdm]kcmc`、人数、头像+姓名+班级+日历图标，点击同学继续觅Ta。
+
+### 一、结论
+
+- 用户实测已证明 `getKb&step=skbjmc` 返回 21 条 `classmatesList`，且 CourseDetailActivity 的 extras 已收到同一份名单；数据链路通。
+- 不再走 `CourseDetailActivity` 的 native 显示闸门；tdkb 分支直接启动官方 `ClassmatesListActivity`，复用其列表/点击逻辑。
+
+### 二、改动
+
+- `patch/patch_roster.py` 增加第三段：tdkb 分支把 `CourseDetailActivity` 的 `const-class` 换成 `ClassmatesListActivity`；补 `kcmc=CourseBean.getKcmc()`、`bjdm=CourseBean.getSkbj()`、`bjmc=CourseBean.getKcmc()`、`ly=OpenTxlb`。保留 `classmatesList`、`rs=CourseBean.getRs()`。
+- 不再依赖 `soure=ta`/`kbtype=tdkb` 的详情页渲染；这些 extras 仍随 Intent 带着，目标页忽略。
+- 产物：`patch/out/qx-454-probe-roster.apk`（74,201,251 B，SHA-256 `8efdf122…`，v1+v2+v3 自签）。
+
+### 三、静态验证
+
+- 反编 tdkb 分支：目标类 = `ClassmatesListActivity`；`move-object v0, p1`、`getRs()`、`kcmc/bjdm/bjmc/ly` 全在；`classmatesList` 仍传 `v0`。
+- manifest 含 `ClassmatesListActivity`；`patch_roster.py --check` OK；`apksigner verify -v` v1/v2/v3 true。
+- 列表项 `uuid` 已由 `t9.m.b` 注入（`xxdm_yhxh`），官方列表页点击/日历入口可直接复用。
+
+### 四、待实测
+
+- 安装 → Ta 的课表 → 点课程 → 应直接进「同学列表」，头部 `[skbj]kcmc` + 人数，行内头像/姓名/班级/日历。
+- 点同学应继续进官方信息页/课表入口（觅Ta）；若点击无反应，再查 `ly`/列表项 `uuid`。
+- 若列表页空/崩：看 `classmatesList`、`kcmc`、`bjdm` 三个 extra 是否与官方 CourseDetail 启动时一致；不换接口、不枚举。
