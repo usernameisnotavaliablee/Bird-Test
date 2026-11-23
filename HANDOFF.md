@@ -1204,3 +1204,67 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 七、边界
 
 仅对本人账号做未登录探测；未构造他人参数、未枚举、未落盘 PII。AVD 为副本，未改动 kit_assistant 任何文件。
+
+---
+
+## 2026-11-23 · 结案：觅Ta 查找服务端返回 200 空包体（客户端静默吞掉）
+
+记录时间：2026-11-23T13:10:00+08:00。触发：拿到账号密码后，在 AVD 跑 454 官方包 + mitmproxy 实测。
+
+### 一、环境打通（接上一节）
+
+- 学校选择页「Select school / RegisterActivity」依旧空列表（服务端回 JSONArray，解析在 native `RegisterActivity.J0`，静态不可读）。
+- **绕过办法（可用）**：直接写 `SharedPreferences("personMessage")`，键 `xxmc/xxdm/serviceurl/rzfs/mode`；写前 `am force-stop`，写完 `chown 10166:10166` + `chmod 660` + `restorecon`。重启后登录页学校显示「河南大学」。
+  ```bash
+  xxmc=河南大学 xxdm=10475 serviceurl=https://api.xiqueer.com/manager/ rzfs=APP_JW mode=0100
+  ```
+- 登录要点：需先勾「我已阅读并同意」CheckBox（`uiautomator` 查 `checkable=true` 节点，坐标 110,1245），否则弹「请阅读并同意…」。登录成功后进入 `.ui.activity.frame.Main`。
+- `adb shell input text` 只能 ASCII：账号/密码可输入，中文不行。
+
+### 二、决定性证据（抓包）
+
+- 用 mitmproxy（app trust-all，无需装 CA）：宿主 `mitmdump -p 8080 -w …`；设备 `settings put global http_proxy 10.0.2.2:8080`。
+- 直接拉起搜索页：`am start -n com.kingosoft.activity_kb_common/…new_kebiao.MitaNew2Activity`（非导出也能起，adbd 已是 root）。
+- 点「查 找」两次（默认条件 / 身份=教师）：
+
+| flow | 响应 |
+|---|---|
+| 1 学期列表 | 200 / 110 B `{"xnxq":[{...}]}` ✅ |
+| 2、4 | 200 / 827 B `{"errcode":"-3","cache":{"jklist":[...]}}` |
+| 3、5 首页数据 | 200 / ~4.7 KB 加密包 ✅ |
+| **6 觅Ta 查找** | **200 / 0 B 空包体** ❌ |
+| **7 觅Ta 查找（教师）** | **200 / 0 B 空包体** ❌ |
+
+关键细节：
+- flow 6 与 2/4 的 `param` **完全相同** → 同一请求被重发 3 次：`-3` → `-3` → 空包体（`-3` 走到 `BaseApplication.h()` 的 `hVar.a()` → `d.h()` 重发）。
+- flow 6 与 7 的 param 不同（`…2b36zn452mt0` vs `…2b37kr4p2mt0`）→ 两次不同的查找，**都空**。
+- 响应头：`Content-Type: text/html;charset=utf-8`、`Content-Length: 0`、带新 JSESSIONID。同会话其它请求都有数据 → **不是登录态/网络/签名问题，只有查找这个 action 空**。
+
+### 三、客户端为何表现为「转圈后无反应」
+
+1. `da/b.java:291` 回调第一行先 dismiss 转圈；
+2. 空体 → `da/b.java:398-403` `callbackError(new JSONException("JsonNull"))`；
+3. `MitaNew2Activity.java:294`、`MitaNewListActivity.java:87` 的 `callbackError` 是**空实现**。
+→ 转圈消失、无弹窗、无列表、无 Toast。与 2026-11-20 起用户现象完全吻合。
+
+### 四、证据落盘（gitignore）
+
+- `analysis/captures/mita_454_20261123.mitm`（原始 flow）
+- `analysis/captures/mita_454_20261123_flows.txt`（可读摘要）
+- `analysis/captures/mita_454_20261123_NOTE.md`（判定表 + 复现命令）
+- `analysis/captures/CREDENTIALS.md`（账号口令，本机用）
+
+### 五、结论与责任面
+
+- **根因在服务端**：`/manager/wap/wapController.jsp` 对觅Ta 查找 action 返回 HTTP 200 + 零长度包体（前置还返回过 `errcode=-3` 缓存未命中）。客户端 454 对该空包**不做任何用户提示**（`callbackError` 空实现），所以只看到转圈。
+- 客户端侧的「静默」是放大器而非根因：同版本后再遇空包/异常仍会静默。如需改观，最小改动是在 `MitaNew2Activity`/`MitaNewListActivity` 的 `callbackError` 里加 Toast（我方 patch 树可做，非官方缺陷）。
+- 未解：该 action 的名字（param 为 native 加密串，`q0` 日志在 release 里全是空方法，拿不到明文 action/step）。
+
+### 六、下一步
+
+1. 向校方/青果反馈：觅Ta 查找接口 200 空包（可附空包时间点与请求指纹，不含 token）。
+2. 若还要定 action 名 → Frida hook `NDKTools.getStringFromNDKZDY` 取明文（成本中，非必需）。
+
+### 七、清理
+
+- 收尾需执行：`adb shell settings put global http_proxy :0`（撤代理），并结束 mitmdump。
