@@ -1309,3 +1309,49 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 六、清理
 
 代理已撤（`settings get global http_proxy` → null），mitmdump 已停，App 已 force-stop。
+
+---
+
+## 2026-11-23 · 「榨干Ta」请求构成梳理 + 能否替代已坏的觅Ta查找
+
+记录时间：2026-11-23T14:10:00+08:00。触发：用户实测「榨干Ta」对已收藏的人仍正常工作，问能否曲线救国。
+
+### 一、请求构成（源码 `patch/src/qx/ProbeActivity.java:255-350`）
+
+| # | 方法 | URL | 参数 |
+|---|---|---|---|
+| ⓪ | GET | `{base}/wap/wapController.jsp` | `userId`=自己、`usertype`=自己、`action=getKb`、`step=skbjmc`、`skbj`、`xnxq`、`xn`、`xq`（仅课程详情宿主） |
+| ① | GET | `{base}/wap/baseInfoServlet` | `userId`=自己、`usertype`=自己、`step=other`、`otheruuid`=目标 |
+| ②a | GET | `{base}/wap/wapController.jsp` | `action=getSettings`、`step=getMITAWithOther`、`userId`=自己、`usertype`=自己、`other`=目标uuid |
+| ②b | GET | 同上 | 同 ②a，仅 `usertype`=对方 |
+| ③ | GET | `{base}/wap/wapController.jsp` | `action=judgeBlackList`、`userId`=自己、`usertype`=自己、`touserId`=目标JID、`tousertype`=对方 |
+| ④ | GET | `{base}/wap/wapController.jsp` | `action=oriHd_ggym`、`step=GetTeaResume`、`userId`=自己、`userid`=去前缀、`jsid`=教师号（两个候选各发一次） |
+
+- 全部走 App 自己的 `da.b`（WebApiRequest），因此 native 六元组加密与 `baseInfoServlet` 的 AES 解密都由原客户端完成——请求形态与官方页面完全一致。
+- 关键：**①只吃 `otheruuid`，不吃任何搜索条件**。它是「按 id 取人」而不是「按条件找人」。
+- ①/③ 是「查他人」链路，与已坏的「查找」action 无依赖。
+
+### 二、返回体（历史真机实测，非本次模拟器）
+
+- ① 教师目标（陈磊/10475_10250137）：**18 键宽行**，`state=0`（对方未开觅Ta）**仍下发** 姓名/性别/学校/部门/账号，另带 `msg=人力系统未对接`；`xueli/xuewei/gangwei/zhichen/jg` 键在值空。
+- ① 学生目标：真机样本 18 键，含 `xm/xb/xxdm/xh/uuid/ssbj` 等；敏感字段不在查他人下发面。
+- ② `getMITAWithOther`：回 `state` + 隐私门 `msg`；与 ① 的 `state=0` 自洽。
+- ③ `judgeBlackList`：回 `flag`（0=正常，非0=拦截）。
+- ④ `GetTeaResume`：某次回 `{"resultSet":[]}`（该校未对接人事系统）；另一 jsid 候选未定论。
+- ⓪ `getKb&step=skbjmc`：回 `{"classmatesList":[21 条]}`（字段 `yhxh/xm/xb/bjmc/yxb/bj/zy/yxbmc/zymc/nj/njmc/tags/pycc/pyccmc/uuid`）。
+
+### 三、能否曲线救国：分层回答
+
+**能救的那一半（查已知目标）**：只要手里有目标 uuid/JID，① 就能拉到该人信息，且**绕开客户端觅Ta开关判定**（`state=0` 服务端照样下发，已实测）。所以「已知某人 → 看 ta 的信息/课表/名单」这条链完全可用，不依赖坏掉的查找。
+
+**救不了的那一半（按条件发现陌生人）**：查找 action 的职责是「条件 → uuid 列表」。榨干Ta 没有替代品；它不发搜索请求，也不解析搜索响应。
+
+**uuid 从哪来（已知且合规的入口）**：收藏/关注列表（`guanxin&step=course_shoucang_me`）、看过我的（`course_chakan_me`）、同班名录（`getKb&step=skbjmc` 回 21 条）、课表名单、扫码 `hqsf xqxt|<uuid>`。这些都是「已在关系/班级内」的人。
+
+**合规红线**：uuid = `xxdm_学号`，学号可猜 → 枚举他人等于批量拖库，本项目明确不做（`HANDOFF` 多次记录）。所以「曲线救国」的边界是：**只能救已知 uuid 的人，不能救按条件找人**。
+
+### 四、本次环境状况（阻塞，未影响上面结论）
+
+- AVD 重装 probe 包后 App 启动即 `exit(0)`（14 秒内 206 次），`mCurrentFocus=null`、无窗口。已排除：显示 GPU（换 `-gpu guest` 同样）、`/system` rw（改 ro 同样）、su 缺失（恢复 `su.hidden` 同样）。
+- 该状态下无法新跑一次榨干Ta；上面返回体取自 2026-10-04/11-10 的真机实测记录与用户本次口述「对已收藏的人正常」。
+- 若要补新样本：需先修 App 启动自退（下一步待查：抓 `zprotect` 之后的第一个 `System.exit` 调用栈），或用手上真机跑一次并回传弹窗文本。
