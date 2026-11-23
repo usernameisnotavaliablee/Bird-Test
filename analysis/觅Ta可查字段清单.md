@@ -4,6 +4,8 @@
 > 证据源：454 官方包**明文 dex** 的 jadx 产物 `analysis/latest/plain_jadx/sources/`（10,388 java）、454 资源 `analysis/latest/jadx/resources/`、452/435 对照树 `analysis/modified/embedded_origin_jadx|jadx/`。
 > 日期：2026-10-04。方法：全树 grep + 逐类读 + (action,step) 全量清单（脚本口径见 §7）。
 
+> **2026-11-23 状态更新（实测）**：本文列出的「按条件查找」入口当前**不可用**——服务端对查找 action 返回 HTTP 200 + 零字节包体（详见 `analysis/觅Ta故障诊断2026-11.md`）。但**按 uuid 取人**的链路（① `baseInfoServlet?step=other`、② `getSettings&step=getMITAWithOther`、③ `judgeBlackList`、④ `GetTeaResume`、⓪ `getKb&step=skbjmc`）均正常，故本文的字段普查结论**继续有效**。
+
 ---
 
 ## 0. 结论速览（除课表外，能查到目标什么）

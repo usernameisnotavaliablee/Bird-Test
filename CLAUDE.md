@@ -148,6 +148,7 @@ analysis/
 - 查同学：`{serviceUrl}/wap/baseInfoServlet`，参数仅 `userId/usertype/step=other/otheruuid`，**无令牌无签名**；客户端只消费 5 路由字段（学生 xm/xxdm/xh/ssbj/xb；教师 xm/xxdm+jsdm|userid）。
 - 教师简历：`{serviceUrl}/wap/wapController.jsp`，`action=oriHd_ggym&step=GetTeaResume&jsid=教师号`；Bean JsxqBean 16 字段（含 sfzh/dh/yx/jg），弹窗只展示 7 项。
 - **step=other 的前置闸门**：发请求前客户端先查**自己**的觅Ta开关（`y8/s0.java`→getMITA），state!=1 只弹窗不发请求——实测抓包必须先开自己开关。入口区分：搜同学/学友圈/同学情 → 信息页（发 step=other）；觅Ta列表点人 → 课表页（不发）。
+- **觅Ta「按条件查找」2026-11-20 起不可用（实测）**：`POST {serviceUrl}/wap/wapController.jsp` 的查找 action 返回 **HTTP 200 + 零字节包体**（前置连返两次 `errcode=-3` 后客户端重发）。客户端 `da/b.java:398-403` 走 `callbackError(JsonNull)`，而 `MitaNew2Activity.java:294` / `MitaNewListActivity.java:87` 的 `callbackError` 是空实现 → 转圈后零提示。**不是接口下线**（404/errcode 对照 + 响应注入实验均证）；按 uuid 取人的链路（step=other / GetTeaResume / getKb&skbjmc）仍正常。完整诊断、复现与「榨干Ta 曲线救国」边界见 `analysis/觅Ta故障诊断2026-11.md`。
 
 ### 三层口径（方法论，Gson 场景必用）
 **展示面 / 解析面 / 下发面**分开论证：解析面（Bean 字段集）由 Gson 反射直写，**不走 getter**——「getSfzh 等 0 处调用 → 不可见」的旧结论只在展示面成立。下发面（服务端实际返回）静态不可定，只能实测（当前主线）。
