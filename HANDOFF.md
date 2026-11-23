@@ -1268,3 +1268,44 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 七、清理
 
 - 收尾需执行：`adb shell settings put global http_proxy :0`（撤代理），并结束 mitmdump。
+
+---
+
+## 2026-11-23 · 红队反驳「服务端关闭了觅Ta接口」——结论：没关闭，但该 action 不产出数据
+
+记录时间：2026-11-23T13:35:00+08:00。触发：用户质疑「是不是服务端关了觅Ta接口」。原 subagent 启动即失败（无输出），改由主会话自查。
+
+### 一、反驳证据（三条）
+
+1. **接口没被下线**：查找请求仍返回 `HTTP 200`。同环境下对照——不存在的路径 `/manager/wap/mitaServlet` 等一律 404 HTML，未加密请求返回 `{"errcode":"-2","message":"非法调用,没有加密"}`。服务端有能力用 404/errcode 表达「不可用」，但查找给的是 200。
+2. **注入实验直证身份**：用 mitmproxy addon 把所有**空响应**改写为 `{"result":{"flag":"0","msg":"REDTEAM-PROBE","data":[]}}`，再点「查 找」→ 界面弹出 `REDTEAM-PROBE` 对话框。
+   - 证明①：那条 200/0 的请求**就是**查找请求（不是埋点/日志）；
+   - 证明②：客户端解析链完全正常，收到合法 JSON 就能走 `MitaNew2Activity` 的 `result.flag/msg/data` 分支。
+3. **服务端的错误路径是带 body 的**：把 flow 6 的完整请求体（含 token/param2/xqerSign/timestamp）绕开代理直接 curl 重放 → `content-length: 875` + `{"errcode":"-5","cache":{...}}`。说明服务端对过期/异常请求会回结构化错误，**空包不是通用行为**。
+
+### 二、更精确的形态（修正上一节）
+
+- 查找请求在同一 param 前缀 `3wmz2b36zn45…` 下被客户端连发 3 次，响应依次：`{"errcode":"-3","cache":{"jklist":[…]}}` → 再来一次 `-3` → **200 空包体**。
+- `-3` 在 `BaseApplication.h()` 里走 `hVar.a()` → `d.h()` 重发，即「缓存未命中/需刷新」语义，客户端自动重试。
+- 所以链路是：**查找 → -3 → 重试 → -3 → 重试 → 空包 → 客户端 callbackError 空实现 → 静默**。
+- param 指纹（可用于日后判定）：学期列表 `3xu4c33pgrl5…`、首页数据 `3uv1ea3q1we2…`、**查找 `3wmz2b36zn45…`（学生）/ `3wmz2b37kr4p…`（教师）**。
+
+### 三、结论
+
+- **不是「接口被关闭」**：路由存在、请求被受理、错误路径正常返回结构化错误。
+- 是「该 action 执行后不产出数据」：可能内部异常被容器吞成空响应、数据源为空、或该分支未实现。服务端用 `200 + 0 字节` 而非错误码表达，客户端又对空包零提示，合起来就是「转圈后无反应」。
+- 仍未定：action 明文名（param 是 native 加密，`t9/q0` 在 release 里全是空方法）。
+
+### 四、方法论沉淀（可复用）
+
+**空响应身份判定法**：mitmproxy addon 拦截 `not res.content` 的响应并替换为带标记的 JSON，看客户端是否按该请求的解析分支反应 → 一步定位「这条空包属于哪个业务」。
+脚本形态见本节实验（`/tmp/probe.py`，逐次实验用，未入库）。
+
+### 五、证据落盘
+
+- `analysis/captures/mita_454_20261123_redteam.mitm`（含注入前空包 + 注入后 55B 探测响应）
+- 其余同上一节。
+
+### 六、清理
+
+代理已撤（`settings get global http_proxy` → null），mitmdump 已停，App 已 force-stop。
