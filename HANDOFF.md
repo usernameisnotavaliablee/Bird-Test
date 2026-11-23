@@ -1148,3 +1148,59 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 ### 五、边界
 
 只探测了本人账号相关的未加密/重放请求，未构造他人参数、未枚举、未落盘 PII。
+
+---
+
+## 2026-11-23 · AVD 走路线 A：环境打通 + 两个卡点
+
+记录时间：2026-11-23T12:45:00+08:00。触发：用户指定用 AVD 跑路线 A（logcat 抓 `WebApiRequest`）。
+
+### 一、环境（只用副本，未动 kit_assistant 原环境）
+
+- AVD 源：`/Users/mac/Desktop/kit_assistant/avd-home/.android/avd/tsn30.avd`（arm64-v8a / API 30 / google_apis / 4G RAM）。原 `.ini` 的 path 指向已卸载的 `/Volumes/MacOS/...`，已失效。
+- **未修改原目录**：`cp -a` 到 `喜鹊/.avd-sandbox/.android/avd/`（副本），只改副本的 `.ini` 与 `config.ini`。
+- emulator 二进制：`/Users/mac/Desktop/kit_assistant/dsh-vm/sdk/emulator/emulator/emulator`（v37.1.11）。
+- **坑：`image.sysdir.1` 要双写 `arm64-v8a/arm64-v8a/`**。只写一层会报 `missing a kernel file! kernel-ranchu`。
+- 启动命令（可复用）：
+  ```bash
+  cd .avd-sandbox
+  export ANDROID_AVD_HOME=$PWD/.android/avd ANDROID_SDK_ROOT=/Users/mac/Desktop/kit_assistant/dsh-vm/sdk
+  $ANDROID_SDK_ROOT/emulator/emulator/emulator -avd tsn30 -no-window -no-audio \
+    -no-boot-anim -gpu swiftshader_indirect -no-snapshot-save -writable-system
+  ```
+
+### 二、App 启动自杀 → 已解（root 检测 = su 二进制）
+
+- 现象：装官方 454 后启动，登录页显示后 ~10s 进程 `exited cleanly (0)`，Toast「不支持在root环境下运行,即将退出...」。
+- 该文案在 Java/明文 dex/资源/native 里**均 grep 不到**（454 payload dex at-rest 加密 + 判定在 native/VMP）。
+- 解法（`-writable-system` 启动后）：`adb root && adb remount && mv /system/xbin/su /system/xbin/su.hidden && adb reboot`。
+- 结果：进程常驻（`ps` 有主进程 + `:pushcore`），停在 LoginActivity。**未见对 `ro.debuggable=1` / `ro.build.tags=dev-keys` 的依赖**。
+
+### 三、网络与首屏
+
+- 模拟器外网正常（ping 223.5.5.5 25ms；学校列表 JSON 已回）。
+- 隐私协议弹窗：`input tap` 坐标必须取 uiautomator 的 bounds 中心（「同意」= 705,1700），早先 tap (700,1400) 无效。
+
+### 四、卡点 1：学校列表空 → 无法选校
+
+- 「Select school」页（实为 `RegisterActivity`，字符串在 `res/layout/registe_activity_xml.xml`）**连空搜索都不渲染任何学校**。
+- 服务端**有**回学校列表：logcat 里能看到 `[{"xxdm":"13338","xxmc":"安徽城市管理职业学院","pinyin":...}, ...]`。
+- 该数组是 `org.json.JSONArray`；`da/b.java:1746 k()` 里 `new JSONObject(str)` 抛 `JSONException: Value [...] cannot be converted to JSONObject`。**注意：这条异常被 `k()` 自己 catch，仅打栈、返回 true，属于每请求都会跑的正常噪音，不是列表空的原因**（此前判断有误，已更正）。
+- 真正解析在 `RegisterActivity.J0(String)` = **native（VMP）**，静态不可读 → 列表为何不渲染无法静态定论。
+- 附带情报：`da/b.java:1746-1758` 的 `k()` 会从任意回包里取 `xqerConfig` 并 `NDKTools.getStringFromNDKPRIVATEKEY` 后写进 `shared_prefs("apple")`。
+
+### 五、卡点 2：登录需要密码（硬阻塞）
+
+- 已知：学校 `xxdm=10475`（河南大学），账号 `2510250975`（见 `analysis/captures/login_resp_plain_0910.json` 的 `userid=10475_2510250975`）。
+- 仓库内无明文密码；9/10 抓包只有响应体，登录请求参数是 native 加密串。
+- 未登录 → `j0.f47325a` 无 token/userid → 觅Ta 全部不可达。
+- 另注：`adb shell input text` 不支持中文（UTF-8 被丢），选校搜索即使列表正常也无法用 ASCII pinyin 命中（实测 `henan`/`anhui` 均「未找到相关学校」）。
+
+### 六、下一步（阻塞解除后一条命令即可）
+
+1. 拿到密码 → 登录 → `adb logcat | grep -E "WebApiRequest|onResponse|LOGINSTR"` → 点一次觅Ta 查询 → 按 `da/b.java:409` 的 `Exception = ...` 分叉定案。
+2. 或：用户在本机看得到模拟器窗口时，改用不带 `-no-window` 启动，人工登录一次（userdata 持久化在 `.avd-sandbox`），之后助手接管 logcat。
+
+### 七、边界
+
+仅对本人账号做未登录探测；未构造他人参数、未枚举、未落盘 PII。AVD 为副本，未改动 kit_assistant 任何文件。

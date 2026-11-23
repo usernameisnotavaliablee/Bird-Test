@@ -22,3 +22,4 @@ __pycache__/
 # Timetable tool outputs: raw responses contain PII; reports are run artifacts
 /timetable/runs/
 /timetable/config.local.json
+.avd-sandbox/
