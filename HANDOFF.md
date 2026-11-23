@@ -1106,3 +1106,45 @@ QX_SDK=/tmp/qx_build/sdk2 bash patch/build_flat.sh
 - 安装 → Ta 的课表 → 点课程 → 应直接进「同学列表」，头部 `[skbj]kcmc` + 人数，行内头像/姓名/班级/日历。
 - 点同学应继续进官方信息页/课表入口（觅Ta）；若点击无反应，再查 `ly`/列表项 `uuid`。
 - 若列表页空/崩：看 `classmatesList`、`kcmc`、`bjdm` 三个 extra 是否与官方 CourseDetail 启动时一致；不换接口、不枚举。
+
+---
+
+## 2026-11-23 · 诊断「觅Ta查询转圈后无反应」：客户端静默链定位 + 服务端现状实测
+
+记录时间：2026-11-23T10:25:00+08:00。触发：用户报告 2026-11-20 起觅Ta查询字段只转圈、随后无反应。手段 = 静态（454 明文 jadx 树）+ 真实请求（curl api.xiqueer.com/manager，未登录、未跑 APK、未查询他人）。
+
+### 一、静态：转圈是谁、什么时候关
+
+- 转圈本体 = `g5/b`(MyloadProgress) → `f9/d`(ProgressDialogNew) → `res/layout/dialog_new.xml`（136×90dp 黑底 + `GifImageView @drawable/frame_loading_1` + 「加载中...」）。show 仅 4 处，全在 `da/b.java`（1813/1826/1859/1872，条件 `f41330d=="0"`）；dismiss 在 `da/b.java:291`（回调第一行）+ `:416`（方法尾）+ `:1463`（异常入口）。六个觅Ta入口 Activity 自身**无任何 loading 控件**。
+- **静默链（核心）**：`da/b.java:300` 的全局闸门 `BaseApplication.h()` 只认「同时有 `errcode` + `message`」的 JSON；不满足就放行 → `:307` 对 `/wap/baseInfoServlet` 整包 AES 解密 → `ba/a.java:21-23` 失败**返回 null 不抛** → `:309` `t9/m.e(null)` 里 `str.replaceAll` → NPE → 被 `:409 catch(Exception)` 吞掉，**callback 与 callbackError 都不触发**，随后 `:413 p()` 收进度、`:416` dismiss。→ 转圈关掉、页面零反馈、native `H2()/D2()` 不复位（只在 success 回调末尾调）。
+- 空体分支：`da/b.java:398-403` → `callbackError(JsonNull)`，而 `MitaNew2Activity.java:294`、`MitaNewListActivity.java:87` 的 `callbackError` 是**空实现**。
+- 觅Ta 门禁 `t9/t0.java:178-190` 是先发 `getMITA`（带转圈）再判 `state`；`JSONException` 分支（`:88`）静默不弹不跳。搜索回调 `MitaNew2Activity.java:265-291` 只认 `{"result":{flag,msg,data}}`，其它形状一句提示都没有（`catch printStackTrace`）。
+- 超时可排除：全树统一 30s（`BaseApplication.java:1046-1048`），超时走 `i(exc)` 先 dismiss 再 toast「连接超时」，不会「一直转」。
+
+### 二、实测：服务端现状（未登录 curl）
+
+| 请求 | 回包 |
+|---|---|
+| `/manager/wap/baseInfoServlet`（无参） | 200 `{"err":"禁止访问"}` |
+| `/manager/wap/baseInfoServlet?step=other&userId=…&usertype=STU&otheruuid=…` | 200 `{"errcode":"-2","message":"非法调用,没有加密"}` |
+| 同上 + `param=abc` | 200 `{"errcode":"-2","message":"请升级到最新版本"}` |
+| 重放 2026-09-10 抓到的**真实加密请求**（param/param2/timestamp/xqerSign/token 齐全） | 200 `{"errcode":"-1","message":"口令失败"}`（token 过期） |
+| 同上，把 appinfo 换成 2.6.452/454/436；或换到 baseInfoServlet 路径 POST | 同样 `口令失败` |
+| `/manager/wap/wapCheckVersion.jsp?…&versioncode=164` | 200，该校最新 `versioncode=165 / 2.6.436` |
+
+结论：域名/服务活着（Tomcat 9.0.75，响应 <150ms）；**加密与签名算法未变**（9 月的加密包仍能通过服务端校验，只卡在 token）；`口令失败` 说明 token 闸门在最前，故我方无法在未登录状态下看到觅Ta 业务层回包。`baseInfoServlet` 裸请求回 `{"err":…}`（无 errcode+message）→ 正好是上面静默链的触发形状。
+
+### 三、卡点判定（按概率）
+
+1. 服务端改了 `/wap/baseInfoServlet`（step=other）回包协议/结构（或该校觅Ta 已停用），回包不再是纯 AES 密文或不再含必需键 → 客户端 `ba.a.a`→null→NPE→吞掉 → 转圈后无反应。**与「无弹窗」现象自洽**（若是 `errcode` 形状，客户端会弹大写 message 弹窗，用户会看见）。
+2. `getMITA` 回包结构变（`state` 不在顶层）→ `t9/t0.java:88` 静默，之后每次点人都一样。
+3. 搜索接口 `result` 封装变 → `MitaNew2Activity` 静默（该入口正是「按字段查询」）。
+
+### 四、下一步（一条 logcat 分叉）
+
+- `patch/device.sh log`，过滤 `WebApiRequest`：出现 `Exception = …` → 命中静默链（1）；出现 `onResponse=<原文>` → 回包到了但解析分支没兜住（2/3）；同时看 `LOGINSTR errcode=` 判断是否被全局闸门拦成弹窗。
+- 或真机 mitmproxy 抓一次（trust-all，无需装 CA），看 `baseInfoServlet` 原始回包是密文、明文还是空。
+
+### 五、边界
+
+只探测了本人账号相关的未加密/重放请求，未构造他人参数、未枚举、未落盘 PII。
